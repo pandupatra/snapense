@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --turbopack --no-git)",
+      "Read(//d/Pandu/project/**)",
+      "Bash(npx create-next-app@latest bill-tracker-temp --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --turbopack --no-git)",
+      "Bash(npx -y create-next-app@latest bill-tracker-temp --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --turbopack --no-git)",
+      "Bash(printf \"n\\\\nn\\\\n\")",
+      "Bash(pnpm init:*)",
+      "Bash(npm init:*)"
+    ]
+  }
+}
