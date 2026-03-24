@@ -1,9 +1,9 @@
 #!/bin/bash
 
 #===============================================================================
-# Bill Tracker - VPS Deployment Script
+# Snapense - VPS Deployment Script
 # Usage: sudo bash deploy.sh <domain> <email>
-# Example: sudo bash deploy.sh billtracker.example.com admin@example.com
+# Example: sudo bash deploy.sh snapense.example.com admin@example.com
 #===============================================================================
 
 set -e  # Exit on error
@@ -28,8 +28,8 @@ fi
 # Parse arguments
 DOMAIN=$1
 EMAIL=$2
-APP_DIR="/var/www/bill-tracker"
-BACKUP_DIR="/var/backups/bill-tracker"
+APP_DIR="/var/www/snapense"
+BACKUP_DIR="/var/backups/snapense"
 
 if [ -z "$DOMAIN" ] || [ -z "$EMAIL" ]; then
     print_error "Missing arguments!"
@@ -151,7 +151,7 @@ print_info "Step 9: Starting application with PM2..."
 cat > ecosystem.config.js << EOF
 module.exports = {
   apps: [{
-    name: 'bill-tracker',
+    name: 'snapense',
     script: 'node_modules/next/dist/bin/next',
     args: 'start',
     cwd: '$APP_DIR',
@@ -237,9 +237,9 @@ certbot --nginx -d $DOMAIN --non-interactive --agree-tos --email $EMAIL --redire
 #===============================================================================
 print_info "Step 12: Setting up database backup script..."
 
-cat > /usr/local/bin/bill-tracker-backup.sh << EOF
+cat > /usr/local/bin/snapense-backup.sh << EOF
 #!/bin/bash
-# Backup script for Bill Tracker SQLite database
+# Backup script for Snapense SQLite database
 
 DATE=\$(date +%Y%m%d_%H%M%S)
 DB_PATH="$APP_DIR/.data/db.sqlite"
@@ -260,10 +260,10 @@ find $BACKUP_DIR -name "db_*.sqlite" -type f -mtime +7 -delete
 echo "Old backups cleaned up"
 EOF
 
-chmod +x /usr/local/bin/bill-tracker-backup.sh
+chmod +x /usr/local/bin/snapense-backup.sh
 
 # Add to crontab (daily at 2 AM)
-(crontab -l 2>/dev/null | grep -v "bill-tracker-backup"; echo "0 2 * * * /usr/local/bin/bill-tracker-backup.sh >> /var/log/bill-tracker-backup.log 2>&1") | crontab -
+(crontab -l 2>/dev/null | grep -v "snapense-backup"; echo "0 2 * * * /usr/local/bin/snapense-backup.sh >> /var/log/snapense-backup.log 2>&1") | crontab -
 
 print_info "Backup scheduled: Daily at 2 AM"
 
@@ -296,9 +296,9 @@ echo "Backup Dir:      $BACKUP_DIR"
 echo ""
 print_info "PM2 Commands:"
 echo "  pm2 status                 - Check app status"
-echo "  pm2 logs bill-tracker      - View logs"
-echo "  pm2 restart bill-tracker   - Restart app"
-echo "  pm2 reload bill-tracker    - Reload app"
+echo "  pm2 logs snapense          - View logs"
+echo "  pm2 restart snapense       - Restart app"
+echo "  pm2 reload snapense        - Reload app"
 echo ""
 print_info "Important: Update your Google OAuth redirect URI to:"
 echo "  https://$DOMAIN/api/auth/google/callback"

@@ -1,4 +1,4 @@
-# Bill Tracker - Deployment Guide
+# Snapense - Deployment Guide
 
 ## Quick VPS Deployment
 
@@ -12,10 +12,10 @@
 #### 1. Upload Files to VPS
 ```bash
 # From your local machine
-scp -r ./ user@your-vps-ip:/tmp/bill-tracker
+scp -r ./ user@your-vps-ip:/tmp/snapense
 
 # Or if using git
-git clone <your-repo-url> /var/www/bill-tracker
+git clone <your-repo-url> /var/www/snapense
 ```
 
 #### 2. Run Deployment Script
@@ -24,7 +24,7 @@ git clone <your-repo-url> /var/www/bill-tracker
 ssh user@your-vps-ip
 
 # Navigate to app directory
-cd /var/www/bill-tracker
+cd /var/www/snapense
 
 # Make script executable and run
 chmod +x deploy.sh
@@ -41,31 +41,31 @@ https://your-domain.com/api/auth/google/callback
 
 ### View Logs
 ```bash
-pm2 logs bill-tracker
+pm2 logs snapense
 ```
 
 ### Restart App
 ```bash
-pm2 restart bill-tracker
+pm2 restart snapense
 ```
 
 ### Update App
 ```bash
-cd /var/www/bill-tracker
+cd /var/www/snapense
 git pull  # or copy new files
 npm ci
 npm run build
-pm2 restart bill-tracker
+pm2 restart snapense
 ```
 
 ### Backup Database
 ```bash
-/usr/local/bin/bill-tracker-backup.sh
+/usr/local/bin/snapense-backup.sh
 ```
 
 ## Environment Variables
 
-Edit `/var/www/bill-tracker/.env.production`:
+Edit `/var/www/snapense/.env.production`:
 
 ```bash
 BETTER_AUTH_URL=https://your-domain.com
@@ -82,7 +82,7 @@ GEMINI_MODEL=gemini-2.5-flash
 
 ### App not starting
 ```bash
-pm2 logs bill-tracker --lines 50
+pm2 logs snapense --lines 50
 ```
 
 ### Nginx issues
@@ -93,8 +93,8 @@ sudo systemctl reload nginx
 
 ### Database permissions
 ```bash
-sudo chmod 755 /var/www/bill-tracker/.data
-sudo chmod 644 /var/www/bill-tracker/.data/db.sqlite
+sudo chmod 755 /var/www/snapense/.data
+sudo chmod 644 /var/www/snapense/.data/db.sqlite
 ```
 
 ### SSL issues

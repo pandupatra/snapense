@@ -1,9 +1,9 @@
 module.exports = {
   apps: [{
-    name: 'bill-tracker',
+    name: 'snapense',
     script: 'node_modules/next/dist/bin/next',
     args: 'start',
-    cwd: '/var/www/bill-tracker',
+    cwd: '/var/www/snapense',
     env: {
       NODE_ENV: 'production',
       PORT: 3000
@@ -13,9 +13,9 @@ module.exports = {
     autorestart: true,
     watch: false,
     max_memory_restart: '500M',
-    error_file: '/var/www/bill-tracker/logs/error.log',
-    out_file: '/var/www/bill-tracker/logs/out.log',
-    log_file: '/var/www/bill-tracker/logs/combined.log',
+    error_file: '/var/www/snapense/logs/error.log',
+    out_file: '/var/www/snapense/logs/out.log',
+    log_file: '/var/www/snapense/logs/combined.log',
     time: true
   }]
 };

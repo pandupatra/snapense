@@ -501,7 +501,7 @@ function HomeWrapper() {
 
           <div className="flex flex-col items-center justify-center min-h-[60vh]">
             <h1 className="text-4xl font-bold tracking-tight mb-4">
-              Bill Tracker
+              Snapense
             </h1>
             <p
               className={cn(
@@ -530,7 +530,7 @@ function HomeWrapper() {
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              Bill Tracker
+              Snapense
             </h1>
             <p
               className={cn(

@@ -7,7 +7,7 @@ import { AuthProvider } from "@/components/auth-components";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Bill Tracker",
+  title: "Snapense",
   description: "Minimalist expense tracking powered by AI",
 };
 

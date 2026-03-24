@@ -25,7 +25,7 @@ export async function createSpreadsheetWithAuth(
   const response = await sheets.spreadsheets.create({
     requestBody: {
       properties: {
-        title: `Bill Tracker - ${new Date().toLocaleDateString()}`,
+        title: `Snapense - ${new Date().toLocaleDateString()}`,
       },
     },
   });
