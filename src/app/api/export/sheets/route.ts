@@ -5,6 +5,8 @@ import { bills } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { createSpreadsheetWithAuth } from '@/lib/google-sheets';
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({
     headers: req.headers,
