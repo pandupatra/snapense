@@ -7,7 +7,14 @@
       "Bash(npx -y create-next-app@latest bill-tracker-temp --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --turbopack --no-git)",
       "Bash(printf \"n\\\\nn\\\\n\")",
       "Bash(pnpm init:*)",
-      "Bash(npm init:*)"
+      "Bash(npm init:*)",
+      "Bash(grep -r \"BETTER_AUTH_URL\\\\|NEXT_PUBLIC\" /var/www/snapense/.env*)",
+      "Bash(pm2 restart:*)",
+      "Bash(pm2 logs:*)",
+      "Bash(pm2 env:*)",
+      "Bash(pm2 show:*)",
+      "Bash(pm2 describe:*)",
+      "Bash(pm2 reload:*)"
     ]
   }
 }

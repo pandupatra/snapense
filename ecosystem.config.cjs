@@ -4,6 +4,7 @@ module.exports = {
     script: 'node_modules/next/dist/bin/next',
     args: 'start',
     cwd: '/var/www/snapense',
+    env_file: '/var/www/snapense/.env',
     env: {
       NODE_ENV: 'production',
       PORT: 3000
