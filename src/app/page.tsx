@@ -2,18 +2,19 @@
 
 import { useState, useRef, useEffect, useCallback, Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useTheme } from "next-themes";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { BillEntryDialog } from "@/components/bill-entry-dialog";
-import { SignInButton, UserButton, useUser } from "@/components/auth-components";
+import { SignInButton, UserButton, useUser, authClient } from "@/components/auth-components";
 import { getCategoryIcon, CATEGORY_ICONS, type Category } from "@/components/category-icons";
 import { getBills, createBill, updateBill, deleteBill, getTotalExpenses, importBillsFromCSV, searchBills, type BillFormData } from "@/app/actions/bills";
-import { Bill, COMMON_CURRENCIES } from "@/types/bill";
+import { Bill, COMMON_CURRENCIES, CATEGORY_NAMES_ID } from "@/types/bill";
 import { format } from "date-fns";
+import { useI18n, formatMonthName } from "@/lib/i18n";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus,
@@ -25,14 +26,12 @@ import {
   Sun,
   Moon,
   ChevronDown,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   AreaChart,
@@ -105,6 +104,9 @@ function generateChartData(bills: Bill[]): DailySpending[] {
 function HomeWrapper() {
   const searchParams = useSearchParams();
   const { user, isLoading } = useUser();
+  const { locale, t } = useI18n();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [bills, setBills] = useState<Bill[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [monthlyAmount, setMonthlyAmount] = useState(0);
@@ -132,10 +134,16 @@ function HomeWrapper() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Handle hydration for theme
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDarkMode = !mounted || theme === "dark" || !theme;
 
   // Handle Google OAuth callback
   useEffect(() => {
@@ -290,9 +298,10 @@ function HomeWrapper() {
   }, [bills]);
 
   // Get current month name
-  const currentMonthName = new Date().toLocaleString("default", {
-    month: "long",
-  });
+  const currentMonthName = formatMonthName(
+    new Date().toLocaleString("default", { month: "long" }),
+    locale
+  );
 
   const handleSaveBill = async (data: BillFormData) => {
     let result;
@@ -421,6 +430,11 @@ function HomeWrapper() {
     }
   };
 
+  const handleSignOut = async () => {
+    await authClient.signOut();
+    window.location.href = "/";
+  };
+
   const handleExportToSheets = async () => {
     if (!googleAccessToken) {
       try {
@@ -478,7 +492,7 @@ function HomeWrapper() {
       >
         <div className="flex items-center justify-center h-screen">
           <div className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
-            Loading...
+            {t.common.loading}
           </div>
         </div>
       </main>
@@ -495,13 +509,29 @@ function HomeWrapper() {
         )}
       >
         <div className="max-w-6xl mx-auto px-6 py-8">
-          <header className="flex justify-end mb-8">
-            <ThemeToggle />
+          <header className="flex justify-between items-center mb-8 gap-4">
+            <button
+              onClick={() => setTheme(isDarkMode ? "light" : "dark")}
+              className={cn(
+                "p-2 rounded-full transition-colors",
+                isDarkMode
+                  ? "hover:bg-gray-800 text-gray-400 hover:text-gray-200"
+                  : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+              )}
+              title={t.theme.toggle}
+            >
+              {isDarkMode ? (
+                <Sun className="w-5 h-5" />
+              ) : (
+                <Moon className="w-5 h-5" />
+              )}
+            </button>
+            <LanguageSwitcher />
           </header>
 
           <div className="flex flex-col items-center justify-center min-h-[60vh]">
             <h1 className="text-4xl font-bold tracking-tight mb-4">
-              Snapense
+              {t.app.title}
             </h1>
             <p
               className={cn(
@@ -509,7 +539,7 @@ function HomeWrapper() {
                 isDarkMode ? "text-gray-400" : "text-gray-500"
               )}
             >
-              Minimalist expense tracking powered by AI
+              {t.app.tagline}
             </p>
             <SignInButton />
           </div>
@@ -525,35 +555,36 @@ function HomeWrapper() {
         isDarkMode ? "bg-[#0f1115] text-white" : "bg-gray-50 text-gray-900"
       )}
     >
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
         {/* Header */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Snapense
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-10 gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              {t.app.title}
             </h1>
             <p
               className={cn(
-                "text-sm mt-1",
+                "text-xs sm:text-sm mt-0.5 hidden sm:block",
                 isDarkMode ? "text-gray-400" : "text-gray-500"
               )}
             >
-              Track your expenses effortlessly
+              {t.app.subtitle}
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all",
+                "flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all",
                 isDarkMode
                   ? "border-gray-700 hover:bg-gray-800 text-gray-300"
                   : "border-gray-200 hover:bg-gray-100 text-gray-700"
               )}
               onClick={handleImportClick}
+              title={t.export.importCSV}
             >
               <Upload className="w-4 h-4" />
-              Import CSV
+              <span className="hidden sm:inline">{t.common.import}</span>
             </button>
 
             {/* Export Dropdown */}
@@ -561,69 +592,47 @@ function HomeWrapper() {
               trigger={
                 <button
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all",
+                    "flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all",
                     isDarkMode
                       ? "border-gray-700 hover:bg-gray-800 text-gray-300"
                       : "border-gray-200 hover:bg-gray-100 text-gray-700"
                   )}
+                  title={t.common.export}
                 >
                   <Download className="w-4 h-4" />
-                  Export
-                  <ChevronDown className="w-3 h-3" />
+                  <span className="hidden sm:inline">{t.common.export}</span>
+                  <ChevronDown className="w-3 h-3 hidden sm:inline" />
                 </button>
               }
             >
               <DropdownMenuItem onClick={handleExportCSV}>
                 <FileText className="mr-2 h-4 w-4" />
-                Export as CSV
+                {t.export.exportAsCSV}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={handleExportToSheets}
                 disabled={isExportingToSheets}
               >
                 <FileText className="mr-2 h-4 w-4" />
-                {isExportingToSheets ? "Exporting..." : "Export to Google Sheets"}
+                {isExportingToSheets ? t.export.exporting : t.export.exportToSheets}
               </DropdownMenuItem>
             </DropdownMenu>
 
             <div
               className={cn(
-                "flex items-center gap-3 ml-4 pl-4 border-l",
-                isDarkMode ? "border-gray-700" : "border-gray-200"
+                "flex items-center gap-1 sm:gap-3 ml-0 sm:ml-4 pl-0 sm:pl-4",
+                isDarkMode ? "border-l-0 sm:border-l border-gray-700" : "border-l-0 sm:border-l border-gray-200"
               )}
             >
-              <div className="flex items-center gap-2">
-                {user.image ? (
-                  <img
-                    src={user.image}
-                    alt={user.name || "User"}
-                    className="w-8 h-8 rounded-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div
-                    className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
-                      isDarkMode
-                        ? "bg-cyan-900/30 text-cyan-400"
-                        : "bg-gray-200 text-gray-600"
-                    )}
-                  >
-                    {(user.name || user.email)?.[0]?.toUpperCase()}
-                  </div>
-                )}
-                <span className="text-sm font-medium hidden sm:inline">
-                  {user.name || user.email}
-                </span>
-              </div>
               <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
+                onClick={() => setTheme(isDarkMode ? "light" : "dark")}
                 className={cn(
                   "p-2 rounded-full transition-colors",
                   isDarkMode
-                    ? "bg-gray-800 text-yellow-400"
-                    : "bg-gray-200 text-gray-700"
+                    ? "hover:bg-gray-800 text-gray-400 hover:text-gray-200"
+                    : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"
                 )}
+                title={t.theme.toggle}
               >
                 {isDarkMode ? (
                   <Sun className="w-4 h-4" />
@@ -631,6 +640,55 @@ function HomeWrapper() {
                   <Moon className="w-4 h-4" />
                 )}
               </button>
+
+              <LanguageSwitcher />
+
+              {/* User Profile Dropdown */}
+              <DropdownMenu
+                align="end"
+                trigger={
+                  <button
+                    className={cn(
+                      "flex items-center gap-2 p-1 rounded-full transition-colors",
+                      isDarkMode
+                        ? "hover:bg-gray-800"
+                        : "hover:bg-gray-200"
+                    )}
+                  >
+                    {user.image ? (
+                      <img
+                        src={user.image}
+                        alt={user.name || "User"}
+                        className="w-8 h-8 rounded-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div
+                        className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
+                          isDarkMode
+                            ? "bg-cyan-900/30 text-cyan-400"
+                            : "bg-gray-200 text-gray-600"
+                        )}
+                      >
+                        {(user.name || user.email)?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                  </button>
+                }
+              >
+                <div className="px-2 py-1.5 border-b">
+                  <p className="text-sm font-medium">{user.name || t.auth.user}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {t.auth.signOut}
+                </DropdownMenuItem>
+              </DropdownMenu>
             </div>
           </div>
         </header>
@@ -640,26 +698,26 @@ function HomeWrapper() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className={cn(
-            "rounded-2xl p-8 mb-10 relative overflow-hidden border",
+            "rounded-2xl p-4 sm:p-6 lg:p-8 mb-6 sm:mb-10 relative overflow-hidden border",
             isDarkMode
               ? "bg-[#1a1d24] border-gray-800"
               : "bg-white border-gray-200 shadow-sm"
           )}
         >
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
-            <div className="lg:col-span-1 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8 items-center">
+            <div className="lg:col-span-1 space-y-4 sm:space-y-6">
               <div>
                 <span
                   className={cn(
-                    "inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4",
+                    "inline-block px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold mb-2 sm:mb-4",
                     isDarkMode
                       ? "bg-gray-800 text-gray-400"
                       : "bg-gray-100 text-gray-600"
                   )}
                 >
-                  Total Expenses
+                  {t.summary.totalExpenses}
                 </span>
-                <h2 className="text-5xl font-bold tracking-tighter mb-2">
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tighter mb-2">
                   {getCurrencySymbol(bills[0]?.currency || "IDR")}
                   {formatCurrency(totalAmount, bills[0]?.currency || "IDR")}
                 </h2>
@@ -668,15 +726,15 @@ function HomeWrapper() {
               <div>
                 <span
                   className={cn(
-                    "inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4",
+                    "inline-block px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold mb-2 sm:mb-4",
                     isDarkMode
                       ? "bg-cyan-950/30 text-cyan-400 border border-cyan-500/20"
                       : "bg-cyan-50 text-cyan-600 border border-cyan-200"
                   )}
                 >
-                  {currentMonthName} Expenses
+                  {t.summary.currentMonthExpenses.replace("{month}", currentMonthName)}
                 </span>
-                <h2 className="text-3xl font-bold tracking-tighter mb-2 text-cyan-400">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter mb-2 text-cyan-400">
                   {getCurrencySymbol(bills[0]?.currency || "IDR")}
                   {formatCurrency(currentMonthExpenses, bills[0]?.currency || "IDR")}
                 </h2>
@@ -684,17 +742,17 @@ function HomeWrapper() {
             </div>
 
             {chartData.length > 0 && (
-              <div className="lg:col-span-2 h-[200px] relative">
+              <div className="lg:col-span-2 h-[150px] sm:h-[200px] relative">
                 {/* Tooltip Simulation */}
                 {maxChartValue.amount > 0 && (
                   <div className="absolute top-0 right-1/4 z-10 bg-cyan-950/80 border border-cyan-500/30 backdrop-blur-md rounded-lg px-3 py-1.5 text-[10px] text-cyan-100 flex items-center gap-2 shadow-lg shadow-cyan-950/50">
                     <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                     <span>
-                      Current Peak:{" "}
+                      {t.summary.currentPeak}:{" "}
                       <span className="font-bold">
                         {formatCurrencyIDR(maxChartValue.amount)}
                       </span>{" "}
-                      on {maxChartValue.day}
+                      {locale === "id" ? "pada" : "on"} {maxChartValue.day}
                     </span>
                   </div>
                 )}
@@ -763,10 +821,10 @@ function HomeWrapper() {
                   </AreaChart>
                 </ResponsiveContainer>
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] text-gray-500 font-medium tracking-widest">
-                  SPENDING
+                  {t.summary.spending}
                 </div>
                 <div className="absolute bottom-[-20px] left-1/2 -translate-x-1/2 text-[10px] text-gray-500 font-medium tracking-widest">
-                  DAYS
+                  {t.summary.days}
                 </div>
               </div>
             )}
@@ -775,13 +833,13 @@ function HomeWrapper() {
 
         {/* Recent Bills Section */}
         <section>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h3 className="text-xl font-bold">Recent Bills</h3>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
+            <h3 className="text-lg sm:text-xl font-bold">{t.bills.recentBills}</h3>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
               <button
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all",
+                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all flex-shrink-0",
                   isDarkMode
                     ? "border-gray-700 hover:bg-gray-800 text-gray-300"
                     : "border-gray-200 hover:bg-gray-100 text-gray-700"
@@ -789,11 +847,11 @@ function HomeWrapper() {
                 onClick={handleManualEntry}
               >
                 <Plus className="w-4 h-4" />
-                Manual Entry
+                <span className="hidden xs:inline">{t.bills.manualEntry}</span>
               </button>
               <button
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all",
+                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all flex-shrink-0",
                   isDarkMode
                     ? "border-gray-700 hover:bg-gray-800 text-gray-300"
                     : "border-gray-200 hover:bg-gray-100 text-gray-700"
@@ -801,16 +859,16 @@ function HomeWrapper() {
                 onClick={handlePhotoMode}
               >
                 <Camera className="w-4 h-4" />
-                Photo Mode
+                <span className="hidden xs:inline">{t.bills.photoMode}</span>
               </button>
               <button
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-all border-none"
+                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-all border-none flex-shrink-0",
                 )}
                 onClick={handleUploadPhoto}
               >
                 <Upload className="w-4 h-4" />
-                Upload Bill
+                <span className="hidden xs:inline">{t.bills.uploadPhoto}</span>
               </button>
             </div>
           </div>
@@ -826,7 +884,7 @@ function HomeWrapper() {
               />
               <Input
                 type="text"
-                placeholder="Search by merchant, description, or category..."
+                placeholder={t.bills.searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className={cn(
@@ -876,7 +934,7 @@ function HomeWrapper() {
           >
             {isLoadingBills ? (
               <div className="text-center py-8 text-gray-500">
-                Loading bills...
+                {t.bills.loadingBills}
               </div>
             ) : bills.length === 0 ? (
               <div className="text-center py-12">
@@ -886,27 +944,27 @@ function HomeWrapper() {
                     isDarkMode ? "text-gray-400" : "text-gray-500"
                   )}
                 >
-                  No bills yet. Add your first bill to get started.
+                  {t.bills.noBills}
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                <table className="w-full text-left border-collapse min-w-[600px]">
                   <thead>
                     <tr
                       className={cn(
-                        "text-[11px] uppercase tracking-wider font-semibold",
+                        "text-[10px] sm:text-[11px] uppercase tracking-wider font-semibold",
                         isDarkMode
                           ? "text-gray-500 bg-gray-900/50"
                           : "text-gray-400 bg-gray-50"
                       )}
                     >
-                      <th className="px-6 py-4">Date</th>
-                      <th className="px-6 py-4">Category</th>
-                      <th className="px-6 py-4">Merchant</th>
-                      <th className="px-6 py-4">Description</th>
-                      <th className="px-6 py-4 text-right">Amount</th>
-                      <th className="px-6 py-4 w-10"></th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4">{t.bills.date}</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4">{t.bills.category}</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4">{t.bills.merchant}</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4">{t.bills.description}</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-right">{t.bills.amount}</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 w-10"></th>
                     </tr>
                   </thead>
                   <tbody
@@ -929,10 +987,10 @@ function HomeWrapper() {
                               : "hover:bg-gray-50"
                           )}
                         >
-                          <td className="px-6 py-5 text-sm font-medium">
+                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-medium">
                             {formatDate(bill.transactionDate)}
                           </td>
-                          <td className="px-6 py-5">
+                          <td className="px-3 sm:px-6 py-3 sm:py-4">
                             <div className="flex items-center gap-2">
                               <div
                                 className={cn(
@@ -944,25 +1002,29 @@ function HomeWrapper() {
                               >
                                 {getCategoryIcon(bill.category as Category)}
                               </div>
-                              <span className="text-sm">{bill.category}</span>
+                              <span className="text-sm">
+                                {locale === "id"
+                                  ? CATEGORY_NAMES_ID[bill.category as Category]
+                                  : bill.category}
+                              </span>
                             </div>
                           </td>
-                          <td className="px-6 py-5 text-sm font-medium">
+                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-medium">
                             {bill.merchant || "-"}
                           </td>
                           <td
                             className={cn(
-                              "px-6 py-5 text-sm max-w-xs truncate",
+                              "px-3 sm:px-6 py-3 sm:py-4 text-sm max-w-xs truncate",
                               isDarkMode ? "text-gray-400" : "text-gray-500"
                             )}
                           >
                             {bill.description || "-"}
                           </td>
-                          <td className="px-6 py-5 text-sm font-bold text-right">
+                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-bold text-right">
                             {getCurrencySymbol(bill.currency)}
                             {formatCurrency(bill.amount, bill.currency)}
                           </td>
-                          <td className="px-6 py-5">
+                          <td className="px-3 sm:px-6 py-3 sm:py-4">
                             <DropdownMenu
                               trigger={
                                 <button
@@ -1005,7 +1067,7 @@ function HomeWrapper() {
                                     d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                                   />
                                 </svg>
-                                Edit
+                                {t.common.edit}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => setDeleteConfirmId(bill.id)}
@@ -1025,7 +1087,7 @@ function HomeWrapper() {
                                     d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                                   />
                                 </svg>
-                                Delete
+                                {t.common.delete}
                               </DropdownMenuItem>
                             </DropdownMenu>
                           </td>
@@ -1044,7 +1106,7 @@ function HomeWrapper() {
                           isDarkMode ? "text-gray-500" : "text-gray-400"
                         )}
                       >
-                        Loading more bills...
+                        {t.bills.loadingMore}
                       </div>
                     )}
                   </div>
@@ -1081,12 +1143,12 @@ function HomeWrapper() {
           <DialogHeader>
             <DialogTitle>
               {editingBillId
-                ? "Edit Bill"
+                ? t.form.editBill
                 : formMode === "manual"
-                ? "Manual Entry"
+                ? t.form.manualEntry
                 : formMode === "photo"
-                ? "Photo Mode"
-                : "Upload Photo"}
+                ? t.form.photoMode
+                : t.form.uploadPhoto}
             </DialogTitle>
           </DialogHeader>
           <BillEntryDialog
@@ -1119,7 +1181,7 @@ function HomeWrapper() {
           className={isDarkMode ? "bg-[#1a1d24] border-gray-800" : ""}
         >
           <DialogHeader>
-            <DialogTitle>Import Results</DialogTitle>
+            <DialogTitle>{t['import'].importResults}</DialogTitle>
           </DialogHeader>
           {importResult && (
             <div className="space-y-4">
@@ -1131,12 +1193,12 @@ function HomeWrapper() {
                     isDarkMode ? "text-gray-400" : "text-gray-500"
                   )}
                 >
-                  bills imported
+                  {t['import'].billsImported}
                 </p>
               </div>
               {importResult.errors.length > 0 && (
                 <div>
-                  <p className="text-sm font-medium mb-2">Errors:</p>
+                  <p className="text-sm font-medium mb-2">{t['import'].errors}:</p>
                   <div
                     className={cn(
                       "max-h-40 overflow-y-auto text-sm space-y-1",
@@ -1148,7 +1210,7 @@ function HomeWrapper() {
                     ))}
                     {importResult.errors.length > 10 && (
                       <p>
-                        ...and {importResult.errors.length - 10} more errors
+                        {t['import'].andMore.replace("{count}", String(importResult.errors.length - 10))}
                       </p>
                     )}
                   </div>
@@ -1157,7 +1219,7 @@ function HomeWrapper() {
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setIsImportOpen(false)}>Close</Button>
+            <Button onClick={() => setIsImportOpen(false)}>{t.common.close}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1168,7 +1230,7 @@ function HomeWrapper() {
           className={isDarkMode ? "bg-[#1a1d24] border-gray-800" : ""}
         >
           <DialogHeader>
-            <DialogTitle>Delete Bill</DialogTitle>
+            <DialogTitle>{t.delete.deleteBill}</DialogTitle>
           </DialogHeader>
           <p
             className={cn(
@@ -1176,12 +1238,11 @@ function HomeWrapper() {
               isDarkMode ? "text-gray-400" : "text-gray-500"
             )}
           >
-            Are you sure you want to delete this bill? This action cannot be
-            undone.
+            {t.delete.confirmMessage}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               variant="outline"
@@ -1190,7 +1251,7 @@ function HomeWrapper() {
                 deleteConfirmId && handleDeleteBill(deleteConfirmId)
               }
             >
-              Delete
+              {t.common.delete}
             </Button>
           </DialogFooter>
         </DialogContent>

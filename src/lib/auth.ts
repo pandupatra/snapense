@@ -2,6 +2,12 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+import { sendVerificationEmail, sendResetPasswordEmail } from "@/lib/email";
+
+interface User {
+  email: string;
+  name: string;
+}
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -14,7 +20,21 @@ export const auth = betterAuth({
     },
   }),
   emailAndPassword: {
-    enabled: false,
+    enabled: true,
+    requireEmailVerification: false, // Changed to false - will handle verification manually
+    sendResetPasswordToken: async ({ user, url }: { user: User; url: string }) => {
+      await sendResetPasswordEmail(user.email, url);
+    },
+    sendVerificationEmail: async ({ user, url }: { user: User; url: string }) => {
+      await sendVerificationEmail(user.email, url);
+    },
+  },
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }: { user: User; url: string }) => {
+      await sendVerificationEmail(user.email, url);
+    },
+    sendOnSignUp: true,
+    autoSignInAfterVerification: false,
   },
   socialProviders: {
     google: {

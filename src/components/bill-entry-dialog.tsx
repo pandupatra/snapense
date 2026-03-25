@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { BillFormData, CATEGORIES, COMMON_CURRENCIES } from "@/types/bill";
+import { BillFormData, CATEGORIES, COMMON_CURRENCIES, CATEGORY_NAMES_ID, type Category } from "@/types/bill";
 import { extractReceiptData, type ExtractedReceiptData } from "@/app/actions/bills";
+import { useI18n } from "@/lib/i18n";
 
 interface BillEntryDialogProps {
   mode: "manual" | "photo" | "upload";
@@ -18,6 +19,7 @@ interface BillEntryDialogProps {
 }
 
 export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: BillEntryDialogProps) {
+  const { locale, t } = useI18n();
   const [isProcessing, setIsProcessing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(image);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -221,7 +223,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
   if (mode === "photo" && !capturedImage) {
     return (
       <div className="space-y-4">
-        <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
+        <div className="relative aspect-[3/4] bg-muted rounded-lg overflow-hidden">
           <video
             ref={videoRef}
             autoPlay
@@ -238,14 +240,14 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
             className="flex-1"
             onClick={onCancel}
           >
-            Cancel
+            {t.common.cancel}
           </Button>
           <Button
             type="button"
             className="flex-1"
             onClick={capturePhoto}
           >
-            Capture
+            {t.form.capture}
           </Button>
         </div>
         <input
@@ -264,7 +266,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
   if ((mode === "photo" || mode === "upload") && capturedImage && isProcessing) {
     return (
       <div className="space-y-4 py-4">
-        <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
+        <div className="relative aspect-[3/4] bg-muted rounded-lg overflow-hidden">
           <img
             src={capturedImage}
             alt="Captured receipt"
@@ -274,7 +276,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
         <div className="flex items-center justify-center py-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-            <span className="text-sm">Processing receipt with AI...</span>
+            <span className="text-sm">{t.form.processingReceipt}</span>
           </div>
         </div>
       </div>
@@ -300,7 +302,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
               className="absolute bottom-2 left-2"
               onClick={retakePhoto}
             >
-              Retake
+              {t.form.retake}
             </Button>
           )}
         </div>
@@ -316,7 +318,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
             : "bg-red-500/10 border border-red-500/20"
         }`}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">AI Confidence</span>
+            <span className="text-sm font-medium">{t.form.aiConfidence}</span>
             <span className={`text-sm font-bold ${
               extractedData.confidence >= 80
                 ? "text-green-600 dark:text-green-400"
@@ -329,7 +331,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
           </div>
           {extractedData.issues && extractedData.issues.length > 0 && (
             <div className="text-xs text-muted-foreground">
-              <span className="font-medium">Notes:</span>
+              <span className="font-medium">{t.form.notes}:</span>
               <ul className="list-disc list-inside mt-1 space-y-1">
                 {extractedData.issues.map((issue, idx) => (
                   <li key={idx}>{issue}</li>
@@ -341,7 +343,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="amount">Amount</Label>
+        <Label htmlFor="amount">{t.form.amount}</Label>
         <div className="flex gap-2">
           <Select
             value={formData.currency}
@@ -368,7 +370,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="category">Category</Label>
+        <Label htmlFor="category">{t.form.category}</Label>
         <Select
           id="category"
           value={formData.category}
@@ -376,28 +378,28 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
         >
           {CATEGORIES.map((cat) => (
             <option key={cat} value={cat}>
-              {cat}
+              {locale === "id" ? CATEGORY_NAMES_ID[cat] : cat}
             </option>
           ))}
         </Select>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="merchant">Merchant</Label>
+        <Label htmlFor="merchant">{t.form.merchant}</Label>
         <Input
           id="merchant"
           type="text"
-          placeholder="Store or merchant name"
+          placeholder={t.form.merchantPlaceholder}
           value={formData.merchant}
           onChange={(e) => setFormData({ ...formData, merchant: e.target.value })}
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="description">{t.form.description}</Label>
         <Textarea
           id="description"
-          placeholder="What was this expense for?"
+          placeholder={t.form.descriptionPlaceholder}
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           rows={2}
@@ -405,7 +407,7 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="date">Date</Label>
+        <Label htmlFor="date">{t.form.date}</Label>
         <Input
           id="date"
           type="date"
@@ -422,10 +424,10 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
           className="flex-1"
           onClick={onCancel}
         >
-          Cancel
+          {t.common.cancel}
         </Button>
         <Button type="submit" className="flex-1">
-          Save Bill
+          {t.form.saveBill}
         </Button>
       </div>
     </form>

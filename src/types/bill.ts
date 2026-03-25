@@ -42,6 +42,18 @@ export const CATEGORIES: Category[] = [
   "Other",
 ];
 
+export const CATEGORY_NAMES_ID: Record<Category, string> = {
+  Food: "Makanan",
+  Transport: "Transportasi",
+  Shopping: "Belanja",
+  Utilities: "Utilitas",
+  Health: "Kesehatan",
+  Entertainment: "Hiburan",
+  Household: "Rumah Tangga",
+  Bills: "Tagihan",
+  Other: "Lainnya",
+};
+
 export const COMMON_CURRENCIES = [
   { code: "USD", symbol: "$", name: "US Dollar" },
   { code: "EUR", symbol: "€", name: "Euro" },

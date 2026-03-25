@@ -296,7 +296,7 @@ function mockScan(): ExtractedReceiptData {
     merchant: "",
     date: new Date().toISOString().slice(0, 10),
     confidence: 0,
-    issues: ["Mock data - API not configured"],
+    issues: ["API key not configured - Set GEMINI_API_KEY in .env.local"],
   };
 }
 
@@ -435,10 +435,12 @@ export async function extractReceiptData(
     '  "category": "Food | Transport | Shopping | Utilities | Health | Entertainment | Household | Bills | Other",',
     '  "description": "short summary up to 120 chars",',
     '  "merchant": "store/merchant name if visible, or empty string",',
-    '  "confidence": 0.0,',
-    '  "issues": ["array of short uncertainty notes"]',
+    '  "confidence": 85,',
+    '  "issues": ["array of short uncertainty notes"],',
     '  "date": "YYYY-MM-DD"',
     "}",
+    "IMPORTANT: confidence must be a number from 0-100 (percentage), not a decimal.",
+    "Use 80-100 for high confidence (clear receipt), 50-79 for medium (some unclear parts), 0-49 for low (very blurry or missing info).",
     "If a field is missing, use safe defaults rather than inventing detailed facts.",
     "Locale hint: Indonesian.",
   ].join("\n");
@@ -539,7 +541,16 @@ export async function extractReceiptData(
       .trim()
       .slice(0, 100);
     const date = normalizeDate(parsed.date);
-    const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+
+    // Normalize confidence: ensure it's a percentage (0-100)
+    let confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+    // If confidence is in decimal range (0-1), convert to percentage (0-100)
+    if (confidence > 0 && confidence < 1) {
+      confidence = Math.round(confidence * 100);
+    }
+    // Clamp to valid range
+    confidence = Math.max(0, Math.min(100, Math.round(confidence)));
+
     const issues = Array.isArray(parsed.issues)
       ? parsed.issues.map((i: string) => String(i)).filter(Boolean)
       : [];
