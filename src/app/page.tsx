@@ -11,10 +11,14 @@ import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { BillEntryDialog } from "@/components/bill-entry-dialog";
 import { SignInButton, UserButton, useUser, authClient } from "@/components/auth-components";
 import { getCategoryIcon, CATEGORY_ICONS, type Category } from "@/components/category-icons";
+import { ScanCounter } from "@/components/scan-counter";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
+import { getUserScanLimit } from "@/app/actions/subscription";
 import { getBills, createBill, updateBill, deleteBill, getTotalExpenses, importBillsFromCSV, searchBills, type BillFormData } from "@/app/actions/bills";
 import { Bill, COMMON_CURRENCIES, CATEGORY_NAMES_ID } from "@/types/bill";
 import { format } from "date-fns";
 import { useI18n, formatMonthName } from "@/lib/i18n";
+import { useErrorToast } from "@/components/error-toast";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus,
@@ -27,6 +31,8 @@ import {
   Moon,
   ChevronDown,
   LogOut,
+  Lock,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -89,12 +95,15 @@ function generateChartData(bills: Bill[]): DailySpending[] {
     dailyTotals.set(dateKey, current + bill.amount);
   });
 
+  // Use current year for date sorting
+  const currentYear = new Date().getFullYear();
+
   // Convert to array and sort by date
   const sortedData = Array.from(dailyTotals.entries())
     .map(([day, amount]) => ({ day, amount }))
     .sort((a, b) => {
-      const dateA = new Date(a.day + ", 2024");
-      const dateB = new Date(b.day + ", 2024");
+      const dateA = new Date(`${a.day}, ${currentYear}`);
+      const dateB = new Date(`${b.day}, ${currentYear}`);
       return dateA.getTime() - dateB.getTime();
     });
 
@@ -106,6 +115,7 @@ function HomeWrapper() {
   const { user, isLoading } = useUser();
   const { locale, t } = useI18n();
   const { theme, setTheme } = useTheme();
+  const { showError, addToast } = useErrorToast();
   const [mounted, setMounted] = useState(false);
   const [bills, setBills] = useState<Bill[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
@@ -134,6 +144,9 @@ function HomeWrapper() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<"scan_limit" | "export">("scan_limit");
+  const [userScanLimit, setUserScanLimit] = useState<{ remaining: number; isPremium: boolean } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -178,10 +191,11 @@ function HomeWrapper() {
       setIsInitialized(true);
     } catch (error) {
       console.error("[fetchBills] Error:", error);
+      showError(error);
     } finally {
       setIsLoadingBills(false);
     }
-  }, []);
+  }, [showError]);
 
   const fetchMoreBills = useCallback(async () => {
     if (isLoadingMore || !hasMore || !isInitialized) return;
@@ -196,6 +210,7 @@ function HomeWrapper() {
       setPage(nextPage);
     } catch (error) {
       console.error("Error fetching more bills:", error);
+      showError(error);
     } finally {
       setIsLoadingMore(false);
     }
@@ -207,6 +222,13 @@ function HomeWrapper() {
       fetchBills();
     }
   }, [user, fetchBills]);
+
+  // Fetch user scan limit info
+  useEffect(() => {
+    if (user) {
+      getUserScanLimit().then(setUserScanLimit).catch(console.error);
+    }
+  }, [user]);
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -260,13 +282,14 @@ function HomeWrapper() {
           setPage(1);
         } catch (error) {
           console.error("Error searching bills:", error);
+          showError(error);
         } finally {
           setIsLoadingBills(false);
         }
       };
       performSearch();
     }
-  }, [debouncedQuery, isInitialized]);
+  }, [debouncedQuery, isInitialized, showError]);
 
   // Generate chart data
   const chartData = useMemo(() => generateChartData(bills), [bills]);
@@ -304,17 +327,19 @@ function HomeWrapper() {
   );
 
   const handleSaveBill = async (data: BillFormData) => {
-    let result;
-    if (editingBillId) {
-      result = await updateBill(editingBillId, data);
-    } else {
-      result = await createBill(data);
-    }
-    if (result) {
+    try {
+      if (editingBillId) {
+        await updateBill(editingBillId, data);
+      } else {
+        await createBill(data);
+      }
       await fetchBills(debouncedQuery);
       setIsFormOpen(false);
       setSelectedImage(null);
       setEditingBillId(null);
+      addToast(editingBillId ? "Bill updated successfully" : "Bill created successfully", "success");
+    } catch (error) {
+      showError(error);
     }
   };
 
@@ -332,11 +357,12 @@ function HomeWrapper() {
   };
 
   const handleDeleteBill = async (id: string) => {
-    const success = await deleteBill(id);
-    if (success) {
+    try {
+      await deleteBill(id);
       await fetchBills(debouncedQuery);
-    } else {
-      alert("Failed to delete bill");
+      addToast("Bill deleted successfully", "success");
+    } catch (error) {
+      showError(error);
     }
     setDeleteConfirmId(null);
   };
@@ -348,12 +374,24 @@ function HomeWrapper() {
   };
 
   const handlePhotoMode = () => {
+    // Check scan limit before opening camera
+    if (userScanLimit && !userScanLimit.isPremium && userScanLimit.remaining <= 0) {
+      setUpgradeReason("scan_limit");
+      setUpgradeDialogOpen(true);
+      return;
+    }
     setFormMode("photo");
     setSelectedImage(null);
     setIsFormOpen(true);
   };
 
   const handleUploadPhoto = () => {
+    // Check scan limit before uploading photo
+    if (userScanLimit && !userScanLimit.isPremium && userScanLimit.remaining <= 0) {
+      setUpgradeReason("scan_limit");
+      setUpgradeDialogOpen(true);
+      return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -373,7 +411,14 @@ function HomeWrapper() {
     }
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
+    // Check premium access before exporting
+    if (userScanLimit && !userScanLimit.isPremium) {
+      setUpgradeReason("export");
+      setUpgradeDialogOpen(true);
+      return;
+    }
+
     const headers = ["Date", "Amount", "Currency", "Category", "Merchant", "Description"];
     const rows = bills.map((bill) => [
       format(new Date(bill.transactionDate), "yyyy-MM-dd"),
@@ -415,13 +460,15 @@ function HomeWrapper() {
 
       if (result.imported.length > 0) {
         await fetchBills();
+        addToast(`Imported ${result.success} bills successfully`, "success");
       }
 
-      setImportResult({ success: result.success, errors: result.errors });
-      setIsImportOpen(true);
+      if (result.errors.length > 0) {
+        setImportResult({ success: result.success, errors: result.errors });
+        setIsImportOpen(true);
+      }
     } catch (error) {
-      setImportResult({ success: 0, errors: ["Failed to read file"] });
-      setIsImportOpen(true);
+      showError(error);
     } finally {
       setIsImporting(false);
       if (importInputRef.current) {
@@ -436,6 +483,13 @@ function HomeWrapper() {
   };
 
   const handleExportToSheets = async () => {
+    // Check premium access before exporting
+    if (userScanLimit && !userScanLimit.isPremium) {
+      setUpgradeReason("export");
+      setUpgradeDialogOpen(true);
+      return;
+    }
+
     if (!googleAccessToken) {
       try {
         const response = await fetch("/api/auth/google");
@@ -467,6 +521,12 @@ function HomeWrapper() {
       });
 
       const data = await response.json();
+
+      if (response.status === 402) {
+        // Premium required error
+        showError(new Error(data.error || "Premium feature"));
+        return;
+      }
 
       if (data.success) {
         window.open(data.spreadsheetUrl, "_blank");
@@ -601,6 +661,9 @@ function HomeWrapper() {
                 >
                   <Download className="w-4 h-4" />
                   <span className="hidden sm:inline">{t.common.export}</span>
+                  {!userScanLimit?.isPremium && (
+                    <Lock className="w-3 h-3 text-amber-500" />
+                  )}
                   <ChevronDown className="w-3 h-3 hidden sm:inline" />
                 </button>
               }
@@ -608,6 +671,9 @@ function HomeWrapper() {
               <DropdownMenuItem onClick={handleExportCSV}>
                 <FileText className="mr-2 h-4 w-4" />
                 {t.export.exportAsCSV}
+                {!userScanLimit?.isPremium && (
+                  <Lock className="ml-auto h-3 w-3 text-amber-500" />
+                )}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={handleExportToSheets}
@@ -615,6 +681,9 @@ function HomeWrapper() {
               >
                 <FileText className="mr-2 h-4 w-4" />
                 {isExportingToSheets ? t.export.exporting : t.export.exportToSheets}
+                {!userScanLimit?.isPremium && !isExportingToSheets && (
+                  <Lock className="ml-auto h-3 w-3 text-amber-500" />
+                )}
               </DropdownMenuItem>
             </DropdownMenu>
 
@@ -642,6 +711,13 @@ function HomeWrapper() {
               </button>
 
               <LanguageSwitcher />
+
+              <ScanCounter
+                onClick={() => {
+                  setUpgradeReason("scan_limit");
+                  setUpgradeDialogOpen(true);
+                }}
+              />
 
               {/* User Profile Dropdown */}
               <DropdownMenu
@@ -833,6 +909,44 @@ function HomeWrapper() {
 
         {/* Recent Bills Section */}
         <section>
+          {/* Scan Limit Alert Banner */}
+          {userScanLimit && !userScanLimit.isPremium && userScanLimit.remaining <= 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "rounded-xl p-4 mb-6 border flex items-start gap-3",
+                isDarkMode
+                  ? "bg-red-950/30 border-red-900/50"
+                  : "bg-red-50 border-red-200"
+              )}
+            >
+              <div className={cn(
+                "flex items-center justify-center w-8 h-8 rounded-full flex-shrink-0 mt-0.5",
+                isDarkMode ? "bg-red-900/50" : "bg-red-100"
+              )}>
+                <Crown className="h-4 w-4 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-red-800 dark:text-red-400 mb-1">
+                  Weekly Scan Limit Reached
+                </h4>
+                <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                  You've used all 5 free scans for this week. Upgrade to Premium for unlimited receipt scanning and exports.
+                </p>
+                <button
+                  onClick={() => {
+                    setUpgradeReason("scan_limit");
+                    setUpgradeDialogOpen(true);
+                  }}
+                  className="text-sm font-medium text-red-700 dark:text-red-300 underline hover:text-red-800 dark:hover:text-red-200"
+                >
+                  View Premium Plans →
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
             <h3 className="text-lg sm:text-xl font-bold">{t.bills.recentBills}</h3>
 
@@ -851,24 +965,34 @@ function HomeWrapper() {
               </button>
               <button
                 className={cn(
-                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all flex-shrink-0",
+                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all flex-shrink-0 relative",
                   isDarkMode
                     ? "border-gray-700 hover:bg-gray-800 text-gray-300"
-                    : "border-gray-200 hover:bg-gray-100 text-gray-700"
+                    : "border-gray-200 hover:bg-gray-100 text-gray-700",
+                  userScanLimit && !userScanLimit.isPremium && userScanLimit.remaining <= 0 && "opacity-50 cursor-not-allowed"
                 )}
                 onClick={handlePhotoMode}
+                disabled={userScanLimit !== null && !userScanLimit?.isPremium && userScanLimit.remaining <= 0}
               >
                 <Camera className="w-4 h-4" />
                 <span className="hidden xs:inline">{t.bills.photoMode}</span>
+                {userScanLimit && !userScanLimit.isPremium && userScanLimit.remaining <= 0 && (
+                  <Lock className="w-3 h-3 text-amber-500 ml-1" />
+                )}
               </button>
               <button
                 className={cn(
-                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-all border-none flex-shrink-0",
+                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-all border-none flex-shrink-0 relative",
+                  userScanLimit && !userScanLimit.isPremium && userScanLimit.remaining <= 0 && "opacity-50 cursor-not-allowed"
                 )}
                 onClick={handleUploadPhoto}
+                disabled={userScanLimit !== null && !userScanLimit?.isPremium && userScanLimit.remaining <= 0}
               >
                 <Upload className="w-4 h-4" />
                 <span className="hidden xs:inline">{t.bills.uploadPhoto}</span>
+                {userScanLimit && !userScanLimit.isPremium && userScanLimit.remaining <= 0 && (
+                  <Lock className="w-3 h-3 text-amber-500 ml-1" />
+                )}
               </button>
             </div>
           </div>
@@ -1256,6 +1380,13 @@ function HomeWrapper() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Upgrade Prompt Dialog */}
+      <UpgradePrompt
+        open={upgradeDialogOpen}
+        onOpenChange={setUpgradeDialogOpen}
+        reason={upgradeReason}
+      />
     </main>
   );
 }

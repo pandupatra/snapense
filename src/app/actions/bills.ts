@@ -4,6 +4,8 @@ import { eq, desc, or, like, and } from "drizzle-orm";
 import { db } from "@/db";
 import { bills, type BillSelect, type Category } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-utils";
+import { ActionError, toActionError, RateLimitError } from "@/lib/errors";
+import { rateLimiter } from "@/lib/rate-limit";
 
 export interface BillFormData {
   amount: string;
@@ -80,56 +82,92 @@ export async function getBills(
     return { bills: resultBills, hasMore };
   } catch (error) {
     console.error("[getBills] Error:", error);
-    return { bills: [], hasMore: false };
+    throw toActionError(error, "Failed to fetch bills");
   }
 }
 
 export async function createBill(
   data: BillFormData,
-): Promise<BillSelect | null> {
+): Promise<BillSelect> {
   try {
     const session = await requireAuth();
+
+    // Check rate limit
+    const limit = await rateLimiter.write.checkLimit(session.user.id);
+    if (!limit.allowed) {
+      throw new RateLimitError(limit.resetAt!);
+    }
+
+    // Validate amount
+    const amount = parseFloat(data.amount);
+    if (Number.isNaN(amount) || amount <= 0) {
+      throw new ActionError("VALIDATION", "Amount must be a positive number");
+    }
+
+    // Validate date
+    const transactionDate = new Date(data.date);
+    if (Number.isNaN(transactionDate.getTime())) {
+      throw new ActionError("VALIDATION", "Invalid date");
+    }
 
     const newBill = {
       id: crypto.randomUUID(),
       userId: session.user.id,
-      amount: parseFloat(data.amount),
+      amount,
       currency: data.currency || "IDR",
       category: data.category,
       description: data.description || null,
       merchant: data.merchant || null,
-      transactionDate: new Date(data.date),
+      transactionDate,
     };
 
     await db.insert(bills).values(newBill);
     return newBill as BillSelect;
   } catch (error) {
     console.error("Error creating bill:", error);
-    return null;
+    throw toActionError(error, "Failed to create bill");
   }
 }
 
 export async function updateBill(
   id: string,
   data: BillFormData,
-): Promise<BillSelect | null> {
+): Promise<BillSelect> {
   try {
     const session = await requireAuth();
+
+    // Check rate limit
+    const limit = await rateLimiter.write.checkLimit(session.user.id);
+    if (!limit.allowed) {
+      throw new RateLimitError(limit.resetAt!);
+    }
 
     // Verify the bill belongs to the user
     const bill = await db.select().from(bills).where(eq(bills.id, id)).limit(1);
 
     if (!bill[0] || bill[0].userId !== session.user.id) {
-      return null;
+      throw new ActionError("NOT_FOUND", "Bill not found");
+    }
+
+    // Validate amount
+    const amount = parseFloat(data.amount);
+    if (Number.isNaN(amount) || amount <= 0) {
+      throw new ActionError("VALIDATION", "Amount must be a positive number");
+    }
+
+    // Validate date
+    const transactionDate = new Date(data.date);
+    if (Number.isNaN(transactionDate.getTime())) {
+      throw new ActionError("VALIDATION", "Invalid date");
     }
 
     const updatedBill = {
-      amount: parseFloat(data.amount),
+      amount,
       currency: data.currency || "IDR",
       category: data.category,
       description: data.description || null,
       merchant: data.merchant || null,
-      transactionDate: new Date(data.date),
+      transactionDate,
     };
 
     await db
@@ -140,26 +178,31 @@ export async function updateBill(
     return { ...bill[0], ...updatedBill } as BillSelect;
   } catch (error) {
     console.error("Error updating bill:", error);
-    return null;
+    throw toActionError(error, "Failed to update bill");
   }
 }
 
-export async function deleteBill(id: string): Promise<boolean> {
+export async function deleteBill(id: string): Promise<void> {
   try {
     const session = await requireAuth();
+
+    // Check rate limit
+    const limit = await rateLimiter.write.checkLimit(session.user.id);
+    if (!limit.allowed) {
+      throw new RateLimitError(limit.resetAt!);
+    }
 
     // Verify the bill belongs to the user
     const bill = await db.select().from(bills).where(eq(bills.id, id)).limit(1);
 
     if (!bill[0] || bill[0].userId !== session.user.id) {
-      return false;
+      throw new ActionError("NOT_FOUND", "Bill not found");
     }
 
     await db.delete(bills).where(eq(bills.id, id));
-    return true;
   } catch (error) {
     console.error("Error deleting bill:", error);
-    return false;
+    throw toActionError(error, "Failed to delete bill");
   }
 }
 
@@ -222,7 +265,7 @@ export async function searchBills(
     return { bills: resultBills, hasMore };
   } catch (error) {
     console.error("[searchBills] Error:", error);
-    return { bills: [], hasMore: false };
+    throw toActionError(error, "Failed to search bills");
   }
 }
 
@@ -237,7 +280,7 @@ export async function getTotalExpenses(): Promise<number> {
     return result.reduce((sum, bill) => sum + bill.amount, 0);
   } catch (error) {
     console.error("Error fetching total:", error);
-    return 0;
+    throw toActionError(error, "Failed to fetch total expenses");
   }
 }
 
@@ -259,19 +302,6 @@ function parseJsonPayload(rawText: string): any {
 function normalizeAmount(value: any): number {
   const numeric = Number(String(value).replace(/[^\d.-]/g, ""));
   return Number.isFinite(numeric) ? numeric : 0;
-}
-
-// Helper function to compress base64 image data (server-side using Buffer)
-function compressBase64Image(base64Data: string, maxSizeKB = 1024): string {
-  // For server-side, we'll just truncate if too large
-  // In production, use sharp or jimp library for proper compression
-  const currentSizeKB = (base64Data.length * 0.75) / 1024; // approximate
-  if (currentSizeKB > maxSizeKB) {
-    console.warn(
-      `Image too large (${currentSizeKB.toFixed(0)}KB), may fail API call`,
-    );
-  }
-  return base64Data;
 }
 
 // Helper function to normalize date
@@ -305,6 +335,13 @@ export async function importBillsFromCSV(
 ): Promise<{ success: number; errors: string[]; imported: BillSelect[] }> {
   try {
     const session = await requireAuth();
+
+    // Check rate limit for CSV imports
+    const limit = await rateLimiter.csvImport.checkLimit(session.user.id);
+    if (!limit.allowed) {
+      throw new RateLimitError(limit.resetAt!);
+    }
+
     const lines = csvData.split("\n").filter((line) => line.trim());
     const errors: string[] = [];
     const imported: BillSelect[] = [];
@@ -405,23 +442,45 @@ export async function importBillsFromCSV(
     return { success: imported.length, errors, imported };
   } catch (error) {
     console.error("Error importing bills:", error);
-    return { success: 0, errors: ["Authentication failed"], imported: [] };
+    throw toActionError(error, "Failed to import bills");
   }
 }
 
 export async function extractReceiptData(
   imageData: string,
 ): Promise<ExtractedReceiptData> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const session = await requireAuth();
+
+  // Check rate limit for AI scans (higher limit than writes)
+  const limit = await rateLimiter.aiScan.checkLimit(session.user.id);
+  if (!limit.allowed) {
+    throw new RateLimitError(limit.resetAt!);
+  }
+
+  // Check weekly scan limit for free users
+  const { getUserScanLimit } = await import("@/app/actions/subscription");
+  const scanLimit = await getUserScanLimit();
+
+  if (!scanLimit.isPremium && scanLimit.remaining <= 0) {
+    throw new ActionError(
+      "RATE_LIMITED",
+      `You've reached your weekly scan limit. Your scans reset on ${new Date(scanLimit.resetsAt).toLocaleDateString("id-ID", { weekday: "long", month: "long", day: "numeric" })}.`,
+    );
+  }
+
+  const { getConfig } = await import("@/lib/config");
 
   // Use mock scan if API key is not configured (like old app)
-  if (!apiKey) {
+  let apiKey: string;
+  try {
+    apiKey = getConfig().geminiApiKey;
+  } catch {
     console.warn("GEMINI_API_KEY is not set, returning mock data");
     return mockScan();
   }
 
   // Use known valid model name
-  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const model = getConfig().geminiModel || "gemini-1.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   const prompt = [
@@ -566,6 +625,15 @@ export async function extractReceiptData(
       issues,
     });
 
+    // Record this scan for the user
+    try {
+      const { recordScan: recordUserScan } = await import("@/app/actions/subscription");
+      await recordUserScan();
+    } catch (scanError) {
+      console.error("[extractReceiptData] Failed to record scan:", scanError);
+      // Don't fail the extraction if recording fails
+    }
+
     return {
       amount: amount.toFixed(2),
       currency,
@@ -578,6 +646,8 @@ export async function extractReceiptData(
     };
   } catch (error: any) {
     console.error("[Gemini API] Exception:", error.message);
+    // For network/API errors, still return mock scan but log the error
+    // This allows the UI to continue even if AI extraction fails
     return mockScan();
   }
 }

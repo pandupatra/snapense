@@ -4,6 +4,9 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-components";
 import { I18nProvider } from "@/lib/i18n";
+import { ErrorProvider } from "@/components/error-toast";
+// Validate environment variables on startup - fail fast if missing
+import "@/lib/config";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -28,7 +31,9 @@ export default function RootLayout({
         >
           <I18nProvider>
             <AuthProvider>
-              {children}
+              <ErrorProvider>
+                {children}
+              </ErrorProvider>
             </AuthProvider>
           </I18nProvider>
         </ThemeProvider>

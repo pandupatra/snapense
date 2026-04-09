@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BillFormData, CATEGORIES, COMMON_CURRENCIES, CATEGORY_NAMES_ID, type Category } from "@/types/bill";
 import { extractReceiptData, type ExtractedReceiptData } from "@/app/actions/bills";
 import { useI18n } from "@/lib/i18n";
+import { compressImageWithStats, getDataURLSizeKB } from "@/lib/image-compressor";
 
 interface BillEntryDialogProps {
   mode: "manual" | "photo" | "upload";
@@ -130,51 +131,26 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
   };
 
   // Compress image to reduce size before sending to API
-  const compressImage = async (dataUrl: string, maxSizeKB = 1024): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxDimension = 2048;
+  const compressImage = async (dataUrl: string): Promise<string> => {
+    // Convert data URL to blob for the compression utility
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
 
-        // Scale down if too large
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Failed to get canvas context'));
-          return;
-        }
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Try compressing with different quality levels
-        let quality = 0.85;
-        let result = canvas.toDataURL('image/jpeg', quality);
-
-        // Keep reducing quality until under size limit or quality is too low
-        while (result.length > maxSizeKB * 1024 * 1.37 && quality > 0.5) {
-          quality -= 0.1;
-          result = canvas.toDataURL('image/jpeg', quality);
-        }
-
-        console.log(`Image compressed: ${(result.length * 0.75 / 1024).toFixed(0)}KB`);
-        resolve(result);
-      };
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = dataUrl;
+    // Use shared compression utility
+    const result = await compressImageWithStats(blob, {
+      maxWidth: 1024,
+      maxHeight: 1024,
+      quality: 0.7,
+      maxSizeKB: 200
     });
+
+    // Log size reduction for debugging
+    console.log(
+      `[Image Compression] ${result.originalSize}KB → ${result.compressedSize}KB ` +
+      `(${result.compressionRatio}% reduction)`
+    );
+
+    return result.dataUrl;
   };
 
   const handleCameraFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -193,8 +169,9 @@ export function BillEntryDialog({ mode, image, onSave, onCancel, initialData }: 
   const processImage = async (imageData: string) => {
     setIsProcessing(true);
     try {
-      // Compress image before sending to API (max 1MB)
-      const compressedImage = await compressImage(imageData, 1024);
+      // Compress image before sending to API
+      const compressedImage = await compressImage(imageData);
+
       // Call server action to extract receipt data
       const extracted = await extractReceiptData(compressedImage);
       console.log("Extracted receipt data:", extracted);

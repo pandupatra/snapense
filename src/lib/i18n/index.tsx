@@ -19,27 +19,29 @@ interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue | undefined>(undefined);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("locale") as Locale | null;
-      if (saved && (saved === "en" || saved === "id")) {
-        return saved;
-      }
+  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
+  const [mounted, setMounted] = useState(false);
+
+  // Read from localStorage only after client-side mount
+  useEffect(() => {
+    setMounted(true);
+    const saved = localStorage.getItem("locale") as Locale | null;
+    if (saved && (saved === "en" || saved === "id")) {
+      setLocaleState(saved);
     }
-    return DEFAULT_LOCALE;
-  });
+  }, []);
 
   const setLocale = (newLocale: Locale) => {
     setLocaleState(newLocale);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("locale", newLocale);
-      document.documentElement.lang = newLocale;
-    }
+    localStorage.setItem("locale", newLocale);
+    document.documentElement.lang = newLocale;
   };
 
   useEffect(() => {
-    document.documentElement.lang = locale;
-  }, [locale]);
+    if (mounted) {
+      document.documentElement.lang = locale;
+    }
+  }, [locale, mounted]);
 
   const value: I18nContextValue = {
     locale,

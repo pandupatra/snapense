@@ -2,9 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { verifications, users } from "@/db/schema";
 import { eq, and, gt } from "drizzle-orm";
+import { rateLimiter } from "@/lib/rate-limit";
+
+// Simple IP-based rate limit key generator for unauthenticated endpoints
+function getClientIdentifier(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  const ip = forwarded ? forwarded.split(',')[0] : request.headers.get('x-real-ip') || 'unknown';
+  return ip;
+}
 
 export async function GET(request: NextRequest) {
   try {
+    // Check rate limit for email verification
+    const clientId = getClientIdentifier(request);
+    const limit = await rateLimiter.auth.checkLimit(clientId);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Too many verification attempts. Please try again later.',
+          resetAt: limit.resetAt?.toISOString(),
+        },
+        { status: 429 }
+      );
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get("token");
     const email = searchParams.get("email");
@@ -62,6 +83,19 @@ export async function GET(request: NextRequest) {
 // Also support POST for compatibility
 export async function POST(request: NextRequest) {
   try {
+    // Check rate limit for email verification
+    const clientId = getClientIdentifier(request);
+    const limit = await rateLimiter.auth.checkLimit(clientId);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Too many verification attempts. Please try again later.',
+          resetAt: limit.resetAt?.toISOString(),
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { token, email } = body;
 

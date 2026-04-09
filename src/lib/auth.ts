@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { sendVerificationEmail, sendResetPasswordEmail } from "@/lib/email";
+import { getConfig } from "@/lib/config";
 
 interface User {
   email: string;
@@ -38,10 +39,10 @@ export const auth = betterAuth({
   },
   socialProviders: {
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      clientId: getConfig().googleClientId,
+      clientSecret: getConfig().googleClientSecret,
       scope: ["email", "profile"],
     },
   },
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+  baseURL: getConfig().betterAuthUrl,
 });
