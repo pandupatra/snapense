@@ -49,12 +49,16 @@ export const id: Translations = {
     verificationSent: "Email verifikasi terkirim! Silakan cek inbox Anda.",
     resendVerification: "Kirim Ulang Email",
     backToSignIn: "Kembali ke Masuk",
-    emailVerificationRequired: "Silakan verifikasi email Anda untuk melanjutkan",
+    emailVerificationRequired:
+      "Silakan verifikasi email Anda untuk melanjutkan",
     verificationLinkSent: "Link verifikasi telah dikirim ke email Anda.",
   },
   summary: {
     totalExpenses: "Total Pengeluaran",
+    totalIncome: "Total Pemasukan",
+    balance: "Saldo",
     currentMonthExpenses: "Pengeluaran {month}",
+    currentMonthIncome: "Pemasukan {month}",
     currentPeak: "Puncak Saat Ini",
     spending: "PENGELUARAN",
     days: "HARI",
@@ -76,6 +80,7 @@ export const id: Translations = {
   },
   form: {
     editBill: "Edit Tagihan",
+    editIncome: "Edit Pemasukan",
     manualEntry: "Input Manual",
     photoMode: "Mode Foto",
     uploadPhoto: "Unggah Foto",
@@ -84,11 +89,15 @@ export const id: Translations = {
     amount: "Jumlah",
     category: "Kategori",
     merchant: "Merchant",
+    source: "Sumber",
     description: "Deskripsi",
     date: "Tanggal",
     merchantPlaceholder: "Nama toko atau merchant",
+    sourcePlaceholder: "Siapa yang membayar Anda?",
     descriptionPlaceholder: "Untuk apa pengeluaran ini?",
+    incomeDescriptionPlaceholder: "Pemasukan dari mana?",
     saveBill: "Simpan Tagihan",
+    saveIncome: "Simpan Pemasukan",
     processingReceipt: "Memproses struk dengan AI...",
     aiConfidence: "Keyakinan AI",
     notes: "Catatan:",
@@ -102,6 +111,14 @@ export const id: Translations = {
     Entertainment: "Hiburan",
     Household: "Rumah Tangga",
     Bills: "Tagihan",
+    Other: "Lainnya",
+  },
+  incomeCategories: {
+    Salary: "Gaji",
+    Freelance: "Freelance",
+    Investment: "Investasi",
+    Gift: "Hadiah",
+    Refund: "Pengembalian",
     Other: "Lainnya",
   },
   export: {
@@ -118,7 +135,8 @@ export const id: Translations = {
   },
   delete: {
     deleteBill: "Hapus Tagihan",
-    confirmMessage: "Apakah Anda yakin ingin menghapus tagihan ini? Tindakan ini tidak dapat dibatalkan.",
+    confirmMessage:
+      "Apakah Anda yakin ingin menghapus tagihan ini? Tindakan ini tidak dapat dibatalkan.",
   },
   currency: {
     usd: "Dolar AS",

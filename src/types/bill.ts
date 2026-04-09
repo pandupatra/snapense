@@ -9,6 +9,14 @@ export type Category =
   | "Bills"
   | "Other";
 
+export type IncomeCategory =
+  | "Salary"
+  | "Freelance"
+  | "Investment"
+  | "Gift"
+  | "Refund"
+  | "Other";
+
 export interface Bill {
   id: string;
   userId: string;
@@ -66,3 +74,48 @@ export const COMMON_CURRENCIES = [
   { code: "CHF", symbol: "Fr", name: "Swiss Franc" },
   { code: "IDR", symbol: "Rp", name: "Indonesian Rupiah" },
 ];
+
+// Income types
+export interface Income {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  category: IncomeCategory;
+  description: string | null;
+  source: string | null;
+  receivedAt: Date;
+  createdAt: Date | null;
+}
+
+export interface IncomeFormData {
+  amount: string;
+  currency: string;
+  category: IncomeCategory;
+  description: string;
+  source: string;
+  date: string;
+}
+
+export const INCOME_CATEGORIES: IncomeCategory[] = [
+  "Salary",
+  "Freelance",
+  "Investment",
+  "Gift",
+  "Refund",
+  "Other",
+];
+
+export const INCOME_CATEGORY_NAMES_ID: Record<IncomeCategory, string> = {
+  Salary: "Gaji",
+  Freelance: "Freelance",
+  Investment: "Investasi",
+  Gift: "Hadiah",
+  Refund: "Pengembalian",
+  Other: "Lainnya",
+};
+
+// Unified transaction type for dashboard
+export type Transaction =
+  | { type: "expense"; data: Bill }
+  | { type: "income"; data: Income };
