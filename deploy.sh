@@ -51,7 +51,7 @@ apt update && apt upgrade -y
 #===============================================================================
 print_info "Step 2: Installing Node.js, Nginx, Certbot..."
 if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     apt install -y nodejs
 else
     print_info "Node.js already installed: $(node -v)"

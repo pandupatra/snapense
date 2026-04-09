@@ -23,6 +23,8 @@ jobs:
             git pull origin main
             echo "Installing dependencies..."
             npm ci
+            echo "Rebuilding native modules..."
+            npm rebuild better-sqlite3
             echo "Building application..."
             npm run build
             echo "Restarting PM2..."
