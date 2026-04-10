@@ -52,7 +52,10 @@ export const en = {
   },
   summary: {
     totalExpenses: "Total Expenses",
+    totalIncome: "Total Income",
+    balance: "Balance",
     currentMonthExpenses: "{month} Expenses",
+    currentMonthIncome: "{month} Income",
     currentPeak: "Current Peak",
     spending: "SPENDING",
     days: "DAYS",
@@ -74,6 +77,7 @@ export const en = {
   },
   form: {
     editBill: "Edit Bill",
+    editIncome: "Edit Income",
     manualEntry: "Manual Entry",
     photoMode: "Photo Mode",
     uploadPhoto: "Upload Photo",
@@ -82,11 +86,15 @@ export const en = {
     amount: "Amount",
     category: "Category",
     merchant: "Merchant",
+    source: "Source",
     description: "Description",
     date: "Date",
     merchantPlaceholder: "Store or merchant name",
+    sourcePlaceholder: "Who paid you?",
     descriptionPlaceholder: "What was this expense for?",
+    incomeDescriptionPlaceholder: "What is this income for?",
     saveBill: "Save Bill",
+    saveIncome: "Save Income",
     processingReceipt: "Processing receipt with AI...",
     aiConfidence: "AI Confidence",
     notes: "Notes:",
@@ -100,6 +108,14 @@ export const en = {
     Entertainment: "Entertainment",
     Household: "Household",
     Bills: "Bills",
+    Other: "Other",
+  },
+  incomeCategories: {
+    Salary: "Salary",
+    Freelance: "Freelance",
+    Investment: "Investment",
+    Gift: "Gift",
+    Refund: "Refund",
     Other: "Other",
   },
   export: {
@@ -116,7 +132,8 @@ export const en = {
   },
   delete: {
     deleteBill: "Delete Bill",
-    confirmMessage: "Are you sure you want to delete this bill? This action cannot be undone.",
+    confirmMessage:
+      "Are you sure you want to delete this bill? This action cannot be undone.",
   },
   currency: {
     usd: "US Dollar",
