@@ -23,8 +23,10 @@ jobs:
             git pull origin main
             echo "Installing dependencies..."
             npm ci
-            echo "Rebuilding native modules..."
-            npm rebuild better-sqlite3
+            echo "Removing pre-built better-sqlite3..."
+            rm -rf node_modules/better-sqlite3
+            echo "Reinstalling better-sqlite3 from source..."
+            npm install better-sqlite3
             echo "Building application..."
             npm run build
             echo "Restarting PM2..."
