@@ -27,6 +27,7 @@ RUN npm rebuild better-sqlite3
 # Stage 2: Build
 # ============================================
 
+ARG NODE_VERSION=24.14.0-slim
 FROM node:${NODE_VERSION} AS builder
 
 # Install build tools
@@ -54,6 +55,7 @@ RUN npm run build
 # Stage 3: Run
 # ============================================
 
+ARG NODE_VERSION=24.14.0-slim
 FROM node:${NODE_VERSION} AS runner
 
 WORKDIR /app
