@@ -1,9 +1,6 @@
 [phases.build]
 cmds = ["npm run build"]
 
-[phases.start]
-cmds = ["npm run start"]
-
 [variables]
 NODE_ENV = "production"
 PORT = "3000"
@@ -11,9 +8,6 @@ HOSTNAME = "0.0.0.0"
 
 [mounts]
 "/app/.data" = "snapense_db"
-
-[build.env]
-NPM_CONFIG_INSTALL_OPTS = "--no-audit --no-fund"
 
 [start]
 cmd = "node server.js"
