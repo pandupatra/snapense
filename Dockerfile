@@ -2,7 +2,7 @@
 # Stage 1: Dependencies
 # ============================================
 
-ARG NODE_VERSION=24.13.0-slim
+ARG NODE_VERSION=24.14.0-slim
 FROM node:${NODE_VERSION} AS dependencies
 
 # Install build tools for native modules
