@@ -1,6 +1,13 @@
 [phases.build]
 cmds = ["npm run build"]
 
+[phases.install]
+cmds = ["npm ci"]
+dependsOn = ["setup"]
+
+[phases.setup]
+nixPkgs = ["python3", "gcc", "gnumake"]
+
 [variables]
 NODE_ENV = "production"
 PORT = "3000"
