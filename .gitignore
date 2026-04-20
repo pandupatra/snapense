@@ -42,3 +42,16 @@ next-env.d.ts
 
 # drizzle
 drizzle
+
+# logs
+logs/
+*.log
+
+# playwright
+.playwright-mcp/
+
+# local claude settings
+.claude/settings.local.json
+
+# pm2
+ecosystem.config.cjs
