@@ -75,6 +75,9 @@ RUN mkdir .next && chown -R nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Create data directory for SQLite and set ownership
+RUN mkdir -p .data && chown -R nextjs:nodejs .data
+
 USER nextjs
 
 EXPOSE 3000
