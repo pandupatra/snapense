@@ -4,9 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     volumes:
-      - snapense_db:/app/.data
-
-volumes:
-  snapense_db:
-    driver: local
+      - ./.data:/app/.data
+    env_file:
+      - .env.production
