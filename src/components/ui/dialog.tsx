@@ -8,7 +8,9 @@ interface DialogContextValue {
   setIsOpen: (open: boolean) => void;
 }
 
-const DialogContext = React.createContext<DialogContextValue | undefined>(undefined);
+const DialogContext = React.createContext<DialogContextValue | undefined>(
+  undefined,
+);
 
 const useDialog = () => {
   const context = React.useContext(DialogContext);
@@ -43,7 +45,15 @@ export function Dialog({ open = false, onOpenChange, children }: DialogProps) {
   );
 }
 
-export function DialogTrigger({ asChild = false, children, ...props }: { asChild?: boolean; children: React.ReactNode; [key: string]: any }) {
+export function DialogTrigger({
+  asChild = false,
+  children,
+  ...props
+}: {
+  asChild?: boolean;
+  children: React.ReactNode;
+  [key: string]: any;
+}) {
   const { setIsOpen } = useDialog();
 
   if (asChild && React.isValidElement(children)) {
@@ -82,13 +92,13 @@ export function DialogContent({
       <div
         className={cn(
           "relative z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-lg",
-          className
+          className,
         )}
         {...props}
       >
         <button
           onClick={() => setIsOpen(false)}
-          className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100"
+          className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -117,7 +127,10 @@ export function DialogHeader({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex flex-col space-y-1.5 text-center sm:text-left mb-4", className)}
+      className={cn(
+        "flex flex-col space-y-1.5 text-center sm:text-left mb-4",
+        className,
+      )}
       {...props}
     />
   );
@@ -129,7 +142,10 @@ export function DialogTitle({
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h2
-      className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+      className={cn(
+        "text-lg font-semibold leading-none tracking-tight",
+        className,
+      )}
       {...props}
     />
   );
@@ -150,7 +166,10 @@ export function DialogFooter({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-4", className)}
+      className={cn(
+        "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-4",
+        className,
+      )}
       {...props}
     />
   );

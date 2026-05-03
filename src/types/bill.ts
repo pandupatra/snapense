@@ -17,6 +17,20 @@ export type IncomeCategory =
   | "Refund"
   | "Other";
 
+export interface Item {
+  id: string;
+  billId: string;
+  name: string;
+  qty: number;
+  price: number;
+}
+
+export interface ItemFormData {
+  name: string;
+  qty: string;
+  price: string;
+}
+
 export interface Bill {
   id: string;
   userId: string;
@@ -27,6 +41,7 @@ export interface Bill {
   merchant: string | null;
   transactionDate: Date;
   createdAt: Date | null;
+  items?: Item[];
 }
 
 export interface BillFormData {
@@ -36,6 +51,7 @@ export interface BillFormData {
   description: string;
   merchant: string;
   date: string;
+  items?: ItemFormData[];
 }
 
 export const CATEGORIES: Category[] = [

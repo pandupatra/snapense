@@ -113,6 +113,16 @@ export const bills = sqliteTable("bill", {
   ),
 });
 
+export const items = sqliteTable("item", {
+  id: text("id").primaryKey(),
+  billId: text("bill_id")
+    .notNull()
+    .references(() => bills.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  qty: integer("qty").notNull().default(1),
+  price: real("price").notNull(),
+});
+
 export type IncomeCategory =
   | "Salary"
   | "Freelance"
@@ -141,5 +151,7 @@ export const incomes = sqliteTable("income", {
 
 export type BillInsert = typeof bills.$inferInsert;
 export type BillSelect = typeof bills.$inferSelect;
+export type ItemInsert = typeof items.$inferInsert;
+export type ItemSelect = typeof items.$inferSelect;
 export type IncomeInsert = typeof incomes.$inferInsert;
 export type IncomeSelect = typeof incomes.$inferSelect;

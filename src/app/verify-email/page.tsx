@@ -11,7 +11,9 @@ function VerifyEmailContent() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "success" | "error">(
+    "loading",
+  );
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -33,18 +35,25 @@ function VerifyEmailContent() {
 
       try {
         // Use the better-auth API endpoint for verification
-        const response = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`, {
-          method: "GET",
-        });
+        const response = await fetch(
+          `/api/auth/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`,
+          {
+            method: "GET",
+          },
+        );
 
         const data = await response.json();
 
         if (!response.ok || data.error) {
           setStatus("error");
-          setMessage(data.error || "Verification failed. The link may have expired.");
+          setMessage(
+            data.error || "Verification failed. The link may have expired.",
+          );
         } else {
           setStatus("success");
-          setMessage("Your email has been verified successfully! You can now sign in.");
+          setMessage(
+            "Your email has been verified successfully! You can now sign in.",
+          );
           // Redirect to home after 3 seconds
           setTimeout(() => {
             router.push("/");
@@ -63,13 +72,15 @@ function VerifyEmailContent() {
     <div
       className={cn(
         "min-h-screen flex items-center justify-center p-4 transition-colors",
-        isDarkMode ? "bg-[#0f1115]" : "bg-gray-50"
+        isDarkMode ? "bg-[#0f1115]" : "bg-gray-50",
       )}
     >
       <div
         className={cn(
           "w-full max-w-md rounded-2xl p-8 text-center",
-          isDarkMode ? "bg-[#1a1d24]" : "bg-white shadow-sm border border-gray-200"
+          isDarkMode
+            ? "bg-[#1a1d24]"
+            : "bg-white shadow-sm border border-gray-200",
         )}
       >
         {/* Header with theme toggle */}
@@ -80,11 +91,21 @@ function VerifyEmailContent() {
               "p-2 rounded-full transition-colors",
               isDarkMode
                 ? "hover:bg-gray-800 text-gray-400"
-                : "hover:bg-gray-100 text-gray-500"
+                : "hover:bg-gray-100 text-gray-500",
             )}
           >
             {isDarkMode ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <circle cx="12" cy="12" r="4" />
                 <path d="M12 2v2" />
                 <path d="M12 20v2" />
@@ -96,7 +117,17 @@ function VerifyEmailContent() {
                 <path d="m19.07 4.93-1.41-1.41" />
               </svg>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
               </svg>
             )}
@@ -105,14 +136,31 @@ function VerifyEmailContent() {
 
         {/* Logo */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-cyan-400">Snapense</h1>
+          <h1
+            className={cn(
+              "text-2xl font-bold",
+              isDarkMode ? "text-cyan-400" : "text-cyan-700",
+            )}
+          >
+            Snapense
+          </h1>
         </div>
 
         {/* Status Icon */}
         <div className="mb-6 flex justify-center">
           {status === "loading" && (
-            <div className="w-16 h-16 rounded-full bg-cyan-500/10 flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+            <div
+              className={cn(
+                "w-16 h-16 rounded-full flex items-center justify-center",
+                isDarkMode ? "bg-cyan-500/10" : "bg-cyan-100",
+              )}
+            >
+              <Loader2
+                className={cn(
+                  "w-8 h-8 animate-spin",
+                  isDarkMode ? "text-cyan-400" : "text-cyan-700",
+                )}
+              />
             </div>
           )}
           {status === "success" && (
@@ -134,7 +182,9 @@ function VerifyEmailContent() {
           {status === "error" && "Verification Failed"}
         </h2>
 
-        <p className={cn("mb-6", isDarkMode ? "text-gray-400" : "text-gray-500")}>
+        <p
+          className={cn("mb-6", isDarkMode ? "text-gray-400" : "text-gray-600")}
+        >
           {message}
         </p>
 
@@ -144,7 +194,7 @@ function VerifyEmailContent() {
             onClick={() => router.push("/")}
             className={cn(
               "px-6 py-2 rounded-lg font-medium transition-colors",
-              "bg-cyan-600 hover:bg-cyan-500 text-white"
+              "bg-cyan-700 hover:bg-cyan-600 text-white",
             )}
           >
             Back to Sign In
@@ -152,7 +202,12 @@ function VerifyEmailContent() {
         )}
 
         {status === "success" && (
-          <p className={cn("text-sm", isDarkMode ? "text-gray-500" : "text-gray-400")}>
+          <p
+            className={cn(
+              "text-sm",
+              isDarkMode ? "text-gray-500" : "text-gray-400",
+            )}
+          >
             Redirecting you to sign in...
           </p>
         )}

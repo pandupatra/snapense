@@ -2,7 +2,13 @@
 
 import { eq, desc, or, like, and } from "drizzle-orm";
 import { db } from "@/db";
-import { bills, type BillSelect, type Category } from "@/db/schema";
+import {
+  bills,
+  items,
+  type BillSelect,
+  type ItemSelect,
+  type Category,
+} from "@/db/schema";
 import { requireAuth } from "@/lib/auth-utils";
 
 export interface BillFormData {
@@ -12,6 +18,7 @@ export interface BillFormData {
   description: string;
   merchant: string;
   date: string;
+  items?: { name: string; qty: string; price: string }[];
 }
 
 export interface ExtractedReceiptData {
@@ -23,6 +30,7 @@ export interface ExtractedReceiptData {
   date: string;
   confidence: number;
   issues: string[];
+  items?: { name: string; qty: string; price: string }[];
 }
 
 const CATEGORIES: Category[] = [
@@ -89,19 +97,44 @@ export async function createBill(
 ): Promise<BillSelect | null> {
   try {
     const session = await requireAuth();
+    const billId = crypto.randomUUID();
+
+    const hasItems = data.items && data.items.length > 0;
+    const amount = hasItems
+      ? data.items!.reduce(
+          (sum, item) =>
+            sum + parseFloat(item.price || "0") * parseInt(item.qty || "1", 10),
+          0,
+        )
+      : parseFloat(data.amount);
 
     const newBill = {
-      id: crypto.randomUUID(),
+      id: billId,
       userId: session.user.id,
-      amount: parseFloat(data.amount),
+      amount,
       currency: data.currency || "IDR",
       category: data.category,
-      description: data.description || null,
+      description: hasItems ? null : data.description || null,
       merchant: data.merchant || null,
       transactionDate: new Date(data.date),
     };
 
-    await db.insert(bills).values(newBill);
+    if (hasItems) {
+      db.transaction((tx) => {
+        tx.insert(bills).values(newBill).run();
+        const itemValues = data.items!.map((item) => ({
+          id: crypto.randomUUID(),
+          billId,
+          name: item.name,
+          qty: parseInt(item.qty || "1", 10),
+          price: parseFloat(item.price || "0"),
+        }));
+        tx.insert(items).values(itemValues).run();
+      });
+    } else {
+      await db.insert(bills).values(newBill);
+    }
+
     return newBill as BillSelect;
   } catch (error) {
     console.error("Error creating bill:", error);
@@ -123,19 +156,41 @@ export async function updateBill(
       return null;
     }
 
+    const hasItems = data.items && data.items.length > 0;
+    const amount = hasItems
+      ? data.items!.reduce(
+          (sum, item) =>
+            sum + parseFloat(item.price || "0") * parseInt(item.qty || "1", 10),
+          0,
+        )
+      : parseFloat(data.amount);
+
     const updatedBill = {
-      amount: parseFloat(data.amount),
+      amount,
       currency: data.currency || "IDR",
       category: data.category,
-      description: data.description || null,
+      description: hasItems ? null : data.description || null,
       merchant: data.merchant || null,
       transactionDate: new Date(data.date),
     };
 
-    await db
-      .update(bills)
-      .set(updatedBill)
-      .where(eq(bills.id, id));
+    if (hasItems) {
+      db.transaction((tx) => {
+        tx.update(bills).set(updatedBill).where(eq(bills.id, id)).run();
+        tx.delete(items).where(eq(items.billId, id)).run();
+        const itemValues = data.items!.map((item) => ({
+          id: crypto.randomUUID(),
+          billId: id,
+          name: item.name,
+          qty: parseInt(item.qty || "1", 10),
+          price: parseFloat(item.price || "0"),
+        }));
+        tx.insert(items).values(itemValues).run();
+      });
+    } else {
+      await db.delete(items).where(eq(items.billId, id));
+      await db.update(bills).set(updatedBill).where(eq(bills.id, id));
+    }
 
     return { ...bill[0], ...updatedBill } as BillSelect;
   } catch (error) {
@@ -297,6 +352,7 @@ function mockScan(): ExtractedReceiptData {
     date: new Date().toISOString().slice(0, 10),
     confidence: 0,
     issues: ["API key not configured - Set GEMINI_API_KEY in .env.local"],
+    items: [],
   };
 }
 
@@ -427,18 +483,24 @@ export async function extractReceiptData(
   const prompt = [
     "Analyze this retail receipt image and respond with valid JSON only.",
     "Target locale: Indonesian retail receipts unless the document clearly indicates otherwise.",
-    "Extract a summary only, not itemized products.",
+    "Extract an itemized list of products if visible on the receipt.",
     "Return this JSON shape exactly:",
     "{",
     '  "amount": "0.00",',
     '  "currency": "IDR",',
     '  "category": "Food | Transport | Shopping | Utilities | Health | Entertainment | Household | Bills | Other",',
-    '  "description": "short summary up to 120 chars",',
+    '  "description": "short summary up to 120 chars (only if items are not available)",',
     '  "merchant": "store/merchant name if visible, or empty string",',
     '  "confidence": 85,',
     '  "issues": ["array of short uncertainty notes"],',
-    '  "date": "YYYY-MM-DD"',
+    '  "date": "YYYY-MM-DD",',
+    '  "items": [',
+    '    {"name": "product name", "qty": "1", "price": "0.00"},',
+    '    {"name": "another product", "qty": "2", "price": "0.00"}',
+    "  ]",
     "}",
+    "If line items are clearly visible, list each one in the items array. Set amount to the total from the receipt.",
+    "If line items are NOT visible or unclear, return an empty items array and provide a description instead.",
     "IMPORTANT: confidence must be a number from 0-100 (percentage), not a decimal.",
     "Use 80-100 for high confidence (clear receipt), 50-79 for medium (some unclear parts), 0-49 for low (very blurry or missing info).",
     "If a field is missing, use safe defaults rather than inventing detailed facts.",
@@ -543,7 +605,8 @@ export async function extractReceiptData(
     const date = normalizeDate(parsed.date);
 
     // Normalize confidence: ensure it's a percentage (0-100)
-    let confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+    let confidence =
+      typeof parsed.confidence === "number" ? parsed.confidence : 0;
     // If confidence is in decimal range (0-1), convert to percentage (0-100)
     if (confidence > 0 && confidence < 1) {
       confidence = Math.round(confidence * 100);
@@ -555,6 +618,21 @@ export async function extractReceiptData(
       ? parsed.issues.map((i: string) => String(i)).filter(Boolean)
       : [];
 
+    // Normalize items
+    const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+    const extractedItems: { name: string; qty: string; price: string }[] =
+      rawItems
+        .filter((item: any) => item && item.name)
+        .map((item: any) => ({
+          name: String(item.name || "")
+            .trim()
+            .slice(0, 200),
+          qty: String(item.qty || "1").trim(),
+          price: String(item.price || "0").trim(),
+        }));
+
+    const hasExtractedItems = extractedItems.length > 0;
+
     console.log("[Gemini Scan] Extracted:", {
       amount,
       currency,
@@ -564,17 +642,27 @@ export async function extractReceiptData(
       date,
       confidence,
       issues,
+      itemsCount: extractedItems.length,
     });
 
     return {
-      amount: amount.toFixed(2),
+      amount: hasExtractedItems
+        ? extractedItems
+            .reduce(
+              (sum: number, i) =>
+                sum + normalizeAmount(i.price) * parseInt(i.qty || "1", 10),
+              0,
+            )
+            .toFixed(2)
+        : amount.toFixed(2),
       currency,
       category,
-      description,
+      description: hasExtractedItems ? "" : description,
       merchant,
       date,
       confidence,
       issues,
+      items: hasExtractedItems ? extractedItems : undefined,
     };
   } catch (error: any) {
     console.error("[Gemini API] Exception:", error.message);

@@ -13,7 +13,8 @@
     --ring: 0 0% 3.9%;
     --radius: 0.5rem;
     --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
+    /* 0 0% 45.1% → 0 0% 39% (#616161) for ≥4.6:1 on white */
+    --muted-foreground: 0 0% 39%;
     --accent: 0 0% 96.1%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
@@ -28,7 +29,8 @@
     --input: 220 13% 18%;
     --ring: 180 100% 50%;
     --muted: 220 15% 13%;
-    --muted-foreground: 220 10% 60%;
+    /* 220 10% 60% → 220 10% 65% (#a0a8b4) for ≥5.3:1 on #1a1d24 */
+    --muted-foreground: 220 10% 65%;
     --accent: 180 100% 50%;
     --popover: 220 15% 13%;
     --popover-foreground: 0 0% 98%;
@@ -41,6 +43,12 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    /* WCAG: ensure minimum readable line height */
+    line-height: 1.5;
+  }
+  /* WCAG 1.4.12: ensure text spacing is adjustable */
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
   }
 }
 

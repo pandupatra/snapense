@@ -9,7 +9,11 @@ export interface DropdownMenuProps {
   align?: "start" | "center" | "end";
 }
 
-export function DropdownMenu({ children, trigger, align = "end" }: DropdownMenuProps) {
+export function DropdownMenu({
+  children,
+  trigger,
+  align = "end",
+}: DropdownMenuProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLDivElement>(null);
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -46,7 +50,7 @@ export function DropdownMenu({ children, trigger, align = "end" }: DropdownMenuP
           ref={menuRef}
           className={cn(
             "absolute top-full mt-2 z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
-            positionClass
+            positionClass,
           )}
           onClick={() => setIsOpen(false)}
         >
@@ -73,11 +77,11 @@ export function DropdownMenuItem({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
+        "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
         "hover:bg-accent hover:text-accent-foreground",
-        "focus:bg-accent focus:text-accent-foreground",
+        "focus:bg-accent focus:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
         "disabled:pointer-events-none disabled:opacity-50",
-        className
+        className,
       )}
     >
       {children}

@@ -1,8 +1,8 @@
 "use server";
 
-import { eq, desc, sql, and, or, like } from "drizzle-orm";
+import { eq, desc, sql, and, or, like, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { bills, incomes } from "@/db/schema";
+import { bills, incomes, items } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-utils";
 import type { Transaction } from "@/types/bill";
 
@@ -18,20 +18,45 @@ export interface DailyFinance {
   expense: number;
 }
 
-export async function getFinancialSummary(): Promise<FinancialSummary> {
+export async function getFinancialSummary(
+  month?: number,
+  year?: number,
+): Promise<FinancialSummary> {
   try {
     const session = await requireAuth();
     const userId = session.user.id;
+
+    let expenseWhere = eq(bills.userId, userId);
+    let incomeWhere = eq(incomes.userId, userId);
+
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
+      const startTs = Math.floor(startDate.getTime() / 1000);
+      const endTs = Math.floor(endDate.getTime() / 1000);
+
+      expenseWhere = and(
+        eq(bills.userId, userId),
+        sql`${bills.transactionDate} >= ${startTs}`,
+        sql`${bills.transactionDate} <= ${endTs}`,
+      )!;
+
+      incomeWhere = and(
+        eq(incomes.userId, userId),
+        sql`${incomes.receivedAt} >= ${startTs}`,
+        sql`${incomes.receivedAt} <= ${endTs}`,
+      )!;
+    }
 
     const [expenseResult, incomeResult] = await Promise.all([
       db
         .select({ total: sql<number>`coalesce(sum(${bills.amount}), 0)` })
         .from(bills)
-        .where(eq(bills.userId, userId)),
+        .where(expenseWhere),
       db
         .select({ total: sql<number>`coalesce(sum(${incomes.amount}), 0)` })
         .from(incomes)
-        .where(eq(incomes.userId, userId)),
+        .where(incomeWhere),
     ]);
 
     const totalExpenses = Number(expenseResult[0]?.total ?? 0);
@@ -150,11 +175,18 @@ export async function getRecentTransactions(
         .offset(offset),
     ]);
 
+    // Fetch items for all fetched expense bills
+    const billIds = expenseBills.map((b) => b.id);
+    const allItems =
+      billIds.length > 0
+        ? await db.select().from(items).where(inArray(items.billId, billIds))
+        : [];
+
     // Merge and sort by date
     const merged = [
       ...expenseBills.map((b) => ({
         type: "expense" as const,
-        data: b,
+        data: { ...b, items: allItems.filter((i) => i.billId === b.id) },
         sortDate: b.transactionDate?.getTime() ?? 0,
       })),
       ...incomeRecords.map((i) => ({
@@ -237,10 +269,17 @@ export async function searchTransactions(
         .offset(offset),
     ]);
 
+    // Fetch items for all fetched expense bills
+    const billIds = expenseBills.map((b) => b.id);
+    const allItems =
+      billIds.length > 0
+        ? await db.select().from(items).where(inArray(items.billId, billIds))
+        : [];
+
     const merged = [
       ...expenseBills.map((b) => ({
         type: "expense" as const,
-        data: b,
+        data: { ...b, items: allItems.filter((i) => i.billId === b.id) },
         sortDate: b.transactionDate?.getTime() ?? 0,
       })),
       ...incomeRecords.map((i) => ({

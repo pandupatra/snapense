@@ -19,15 +19,14 @@ interface I18nContextValue {
 const I18nContext = createContext<I18nContextValue | undefined>(undefined);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("locale") as Locale | null;
-      if (saved && (saved === "en" || saved === "id")) {
-        return saved;
-      }
+  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("locale") as Locale | null;
+    if (saved && (saved === "en" || saved === "id") && saved !== DEFAULT_LOCALE) {
+      setLocaleState(saved);
     }
-    return DEFAULT_LOCALE;
-  });
+  }, []);
 
   const setLocale = (newLocale: Locale) => {
     setLocaleState(newLocale);

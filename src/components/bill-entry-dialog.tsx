@@ -16,12 +16,19 @@ import {
   type Category,
   type IncomeCategory,
   type IncomeFormData,
+  type ItemFormData,
 } from "@/types/bill";
 import {
   extractReceiptData,
   type ExtractedReceiptData,
 } from "@/app/actions/bills";
 import { useI18n } from "@/lib/i18n";
+import { Plus, X } from "lucide-react";
+
+function getCurrencySymbol(currency: string): string {
+  const currencyObj = COMMON_CURRENCIES.find((c) => c.code === currency);
+  return currencyObj?.symbol || "Rp";
+}
 
 export type TransactionType = "expense" | "income";
 
@@ -34,6 +41,7 @@ interface BillEntryDialogProps {
   initialData?: BillFormData;
   initialIncomeData?: IncomeFormData;
   initialType?: TransactionType;
+  initialItems?: ItemFormData[];
 }
 
 export function BillEntryDialog({
@@ -45,6 +53,7 @@ export function BillEntryDialog({
   initialData,
   initialIncomeData,
   initialType = "expense",
+  initialItems,
 }: BillEntryDialogProps) {
   const { locale, t } = useI18n();
   const [transactionType, setTransactionType] =
@@ -58,6 +67,32 @@ export function BillEntryDialog({
   const processedImageRef = useRef<string | null>(null);
   const [extractedData, setExtractedData] =
     useState<ExtractedReceiptData | null>(null);
+  const [items, setItems] = useState<ItemFormData[]>(initialItems || []);
+
+  const itemsTotal = items.reduce(
+    (sum, item) =>
+      sum + parseFloat(item.price || "0") * parseInt(item.qty || "1", 10),
+    0,
+  );
+  const hasItems = items.length > 0;
+
+  const addItem = () => {
+    setItems([...items, { name: "", qty: "1", price: "" }]);
+  };
+
+  const removeItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const updateItem = (
+    index: number,
+    field: keyof ItemFormData,
+    value: string,
+  ) => {
+    const updated = [...items];
+    updated[index] = { ...updated[index], [field]: value };
+    setItems(updated);
+  };
 
   const [expenseForm, setExpenseForm] = useState<BillFormData>(
     initialData || {
@@ -162,6 +197,7 @@ export function BillEntryDialog({
     setCapturedImage(null);
     processedImageRef.current = null;
     setExtractedData(null);
+    setItems([]);
     setExpenseForm({
       amount: "",
       currency: "IDR",
@@ -249,6 +285,11 @@ export function BillEntryDialog({
         merchant: extracted.merchant,
         date: extracted.date,
       });
+      if (extracted.items && extracted.items.length > 0) {
+        setItems(extracted.items);
+      } else {
+        setItems([]);
+      }
     } catch (error) {
       console.error("Error processing image:", error);
     } finally {
@@ -268,6 +309,7 @@ export function BillEntryDialog({
         merchant: "",
         date: new Date().toISOString().split("T")[0],
       });
+      setItems([]);
     } else {
       setIncomeForm({
         amount: "",
@@ -283,7 +325,12 @@ export function BillEntryDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (transactionType === "expense") {
-      onSaveExpense(expenseForm);
+      onSaveExpense({
+        ...expenseForm,
+        amount: hasItems ? itemsTotal.toString() : expenseForm.amount,
+        description: hasItems ? "" : expenseForm.description,
+        items: hasItems ? items : undefined,
+      });
     } else {
       onSaveIncome(incomeForm);
     }
@@ -432,52 +479,66 @@ export function BillEntryDialog({
           </div>
         )}
 
-      <div className="space-y-2">
-        <Label htmlFor="amount">{t.form.amount}</Label>
-        <div className="flex gap-2">
-          <Select
-            value={
-              transactionType === "expense"
-                ? expenseForm.currency
-                : incomeForm.currency
-            }
-            onChange={(e) => {
-              if (transactionType === "expense") {
-                setExpenseForm({ ...expenseForm, currency: e.target.value });
-              } else {
-                setIncomeForm({ ...incomeForm, currency: e.target.value });
+      {/* Amount (hidden when items exist for expense) */}
+      {!(hasItems && transactionType === "expense") && (
+        <div className="space-y-2">
+          <Label htmlFor="amount">{t.form.amount}</Label>
+          <div className="flex gap-2">
+            <Select
+              value={
+                transactionType === "expense"
+                  ? expenseForm.currency
+                  : incomeForm.currency
               }
-            }}
-            className="w-24"
-          >
-            {COMMON_CURRENCIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.code}
-              </option>
-            ))}
-          </Select>
-          <Input
-            id="amount"
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            value={
-              transactionType === "expense"
-                ? expenseForm.amount
-                : incomeForm.amount
-            }
-            onChange={(e) => {
-              if (transactionType === "expense") {
-                setExpenseForm({ ...expenseForm, amount: e.target.value });
-              } else {
-                setIncomeForm({ ...incomeForm, amount: e.target.value });
+              onChange={(e) => {
+                if (transactionType === "expense") {
+                  setExpenseForm({ ...expenseForm, currency: e.target.value });
+                } else {
+                  setIncomeForm({ ...incomeForm, currency: e.target.value });
+                }
+              }}
+              className="w-24"
+            >
+              {COMMON_CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code}
+                </option>
+              ))}
+            </Select>
+            <Input
+              id="amount"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              value={
+                transactionType === "expense"
+                  ? expenseForm.amount
+                  : incomeForm.amount
               }
-            }}
-            required
-            className="flex-1"
-          />
+              onChange={(e) => {
+                if (transactionType === "expense") {
+                  setExpenseForm({ ...expenseForm, amount: e.target.value });
+                } else {
+                  setIncomeForm({ ...incomeForm, amount: e.target.value });
+                }
+              }}
+              required
+              className="flex-1"
+            />
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Show items total when items exist */}
+      {hasItems && transactionType === "expense" && (
+        <div className="space-y-2">
+          <Label>{t.form.amount}</Label>
+          <div className="text-sm font-bold">
+            {getCurrencySymbol(expenseForm.currency)}
+            {itemsTotal.toLocaleString("id-ID")}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="category">{t.form.category}</Label>
@@ -544,30 +605,89 @@ export function BillEntryDialog({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="description">{t.form.description}</Label>
-        <Textarea
-          id="description"
-          placeholder={
-            transactionType === "expense"
-              ? t.form.descriptionPlaceholder
-              : t.form.incomeDescriptionPlaceholder
-          }
-          value={
-            transactionType === "expense"
-              ? expenseForm.description
-              : incomeForm.description
-          }
-          onChange={(e) => {
-            if (transactionType === "expense") {
-              setExpenseForm({ ...expenseForm, description: e.target.value });
-            } else {
-              setIncomeForm({ ...incomeForm, description: e.target.value });
+      {/* Items Section (expense only) */}
+      {transactionType === "expense" && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>{t.form.items}</Label>
+            <Button type="button" variant="outline" size="sm" onClick={addItem}>
+              <Plus className="w-3 h-3 mr-1" />
+              {t.form.addItem}
+            </Button>
+          </div>
+          {items.map((item, index) => (
+            <div key={index} className="flex gap-2 items-center">
+              <Input
+                type="text"
+                placeholder={t.form.itemName}
+                value={item.name}
+                onChange={(e) => updateItem(index, "name", e.target.value)}
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                placeholder={t.form.itemQty}
+                value={item.qty}
+                onChange={(e) => updateItem(index, "qty", e.target.value)}
+                className="w-16"
+                min="1"
+              />
+              <Input
+                type="number"
+                step="0.01"
+                placeholder={t.form.itemPrice}
+                value={item.price}
+                onChange={(e) => updateItem(index, "price", e.target.value)}
+                className="w-24"
+              />
+              <button
+                type="button"
+                onClick={() => removeItem(index)}
+                className="text-red-500 hover:text-red-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          {hasItems && (
+            <div className="text-sm font-medium text-right pt-1">
+              {t.form.itemTotal}: {getCurrencySymbol(expenseForm.currency)}
+              {itemsTotal.toLocaleString("id-ID")}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Description (hidden when items exist for expense) */}
+      {!(hasItems && transactionType === "expense") && (
+        <div className="space-y-2">
+          <Label htmlFor="description">{t.form.description}</Label>
+          <Textarea
+            id="description"
+            placeholder={
+              transactionType === "expense"
+                ? t.form.descriptionPlaceholder
+                : t.form.incomeDescriptionPlaceholder
             }
-          }}
-          rows={2}
-        />
-      </div>
+            value={
+              transactionType === "expense"
+                ? expenseForm.description
+                : incomeForm.description
+            }
+            onChange={(e) => {
+              if (transactionType === "expense") {
+                setExpenseForm({
+                  ...expenseForm,
+                  description: e.target.value,
+                });
+              } else {
+                setIncomeForm({ ...incomeForm, description: e.target.value });
+              }
+            }}
+            rows={2}
+          />
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="date">{t.form.date}</Label>
@@ -628,7 +748,7 @@ function TypeToggle({
               : "bg-white text-gray-900 shadow-sm"
             : isDark
               ? "text-gray-400 hover:text-gray-200"
-              : "text-gray-500 hover:text-gray-700"
+              : "text-gray-600 hover:text-gray-800"
         }`}
         onClick={() => onChange("expense")}
       >
@@ -643,7 +763,7 @@ function TypeToggle({
               : "bg-emerald-50 text-emerald-600 shadow-sm"
             : isDark
               ? "text-gray-400 hover:text-gray-200"
-              : "text-gray-500 hover:text-gray-700"
+              : "text-gray-600 hover:text-gray-800"
         }`}
         onClick={() => onChange("income")}
       >
