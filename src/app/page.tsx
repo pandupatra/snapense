@@ -72,7 +72,7 @@ import {
   type IncomeCategory as BillIncomeCategory,
 } from "@/types/bill";
 import { format } from "date-fns";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, formatMonthName } from "@/lib/i18n";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus,
@@ -84,6 +84,7 @@ import {
   Sun,
   Moon,
   ChevronDown,
+  ChevronUp,
   LogOut,
   TrendingUp,
   TrendingDown,
@@ -92,6 +93,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   XAxis,
   YAxis,
@@ -143,6 +145,83 @@ function formatDayLabel(dateStr: string): string {
   return format(date, "MMM d");
 }
 
+interface CategoryColors {
+  darkBg: string;
+  lightBg: string;
+  darkPill: string;
+  lightPill: string;
+}
+
+function getCategoryColor(category: Category): CategoryColors {
+  const map: Record<Category, CategoryColors> = {
+    Food: {
+      darkBg: "bg-[#ef9f27]/15",
+      lightBg: "bg-amber-100",
+      darkPill: "bg-[#ef9f27]/15 text-[#ef9f27]",
+      lightPill: "bg-amber-100 text-amber-700",
+    },
+    Transport: {
+      darkBg: "bg-blue-400/15",
+      lightBg: "bg-blue-100",
+      darkPill: "bg-blue-400/15 text-blue-400",
+      lightPill: "bg-blue-100 text-blue-700",
+    },
+    Shopping: {
+      darkBg: "bg-emerald-400/15",
+      lightBg: "bg-emerald-100",
+      darkPill: "bg-emerald-400/15 text-emerald-400",
+      lightPill: "bg-emerald-100 text-emerald-700",
+    },
+    Utilities: {
+      darkBg: "bg-yellow-400/15",
+      lightBg: "bg-yellow-100",
+      darkPill: "bg-yellow-400/15 text-yellow-400",
+      lightPill: "bg-yellow-100 text-yellow-700",
+    },
+    Health: {
+      darkBg: "bg-pink-400/15",
+      lightBg: "bg-pink-100",
+      darkPill: "bg-pink-400/15 text-pink-400",
+      lightPill: "bg-pink-100 text-pink-700",
+    },
+    Entertainment: {
+      darkBg: "bg-purple-400/15",
+      lightBg: "bg-purple-100",
+      darkPill: "bg-purple-400/15 text-purple-400",
+      lightPill: "bg-purple-100 text-purple-700",
+    },
+    Household: {
+      darkBg: "bg-orange-400/15",
+      lightBg: "bg-orange-100",
+      darkPill: "bg-orange-400/15 text-orange-400",
+      lightPill: "bg-orange-100 text-orange-700",
+    },
+    Bills: {
+      darkBg: "bg-cyan-400/15",
+      lightBg: "bg-cyan-100",
+      darkPill: "bg-cyan-400/15 text-cyan-400",
+      lightPill: "bg-cyan-100 text-cyan-700",
+    },
+    Other: {
+      darkBg: "bg-gray-400/15",
+      lightBg: "bg-gray-100",
+      darkPill: "bg-gray-400/15 text-gray-400",
+      lightPill: "bg-gray-100 text-gray-600",
+    },
+  };
+  return map[category] || map.Other;
+}
+
+function getIncomeCategoryColor(category: IncomeCategory): CategoryColors {
+  const base: CategoryColors = {
+    darkBg: "bg-emerald-400/12",
+    lightBg: "bg-emerald-100",
+    darkPill: "bg-emerald-400/12 text-emerald-300",
+    lightPill: "bg-emerald-100 text-emerald-700",
+  };
+  return base;
+}
+
 function HomeWrapper() {
   const searchParams = useSearchParams();
   const { user, isLoading } = useUser();
@@ -188,9 +267,22 @@ function HomeWrapper() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isNominalHidden, setIsNominalHidden] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  const toggleExpand = (id: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   // Handle hydration for theme
   useEffect(() => {
@@ -219,11 +311,14 @@ function HomeWrapper() {
     setIsLoadingBills(true);
     setIsInitialized(false);
     try {
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
       const [txData, summary, chart] = await Promise.all([
         query && query.trim()
           ? searchTransactions(query.trim(), 1, 20)
           : getRecentTransactions(1, 20),
-        getFinancialSummary(),
+        getFinancialSummary(currentMonth, currentYear),
         getChartData(),
       ]);
       setTransactions(txData.transactions);
@@ -573,11 +668,12 @@ function HomeWrapper() {
           isDarkMode ? "bg-[#0f1115] text-white" : "bg-gray-50 text-gray-900",
         )}
       >
-        <div className="flex items-center justify-center h-screen">
-          <div className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
-            {t.common.loading}
-          </div>
-        </div>
+        <LoadingSpinner
+          size="lg"
+          text={t.common.loading}
+          isDarkMode={isDarkMode}
+          fullScreen
+        />
       </main>
     );
   }
@@ -599,7 +695,7 @@ function HomeWrapper() {
                 "p-2 rounded-full transition-colors",
                 isDarkMode
                   ? "hover:bg-gray-800 text-gray-400 hover:text-gray-200"
-                  : "hover:bg-gray-200 text-gray-500 hover:text-gray-700",
+                  : "hover:bg-gray-200 text-gray-600 hover:text-gray-800",
               )}
               title={t.theme.toggle}
             >
@@ -619,7 +715,7 @@ function HomeWrapper() {
             <p
               className={cn(
                 "mb-12 text-center",
-                isDarkMode ? "text-gray-400" : "text-gray-500",
+                isDarkMode ? "text-gray-400" : "text-gray-600",
               )}
             >
               {t.app.tagline}
@@ -648,7 +744,7 @@ function HomeWrapper() {
             <p
               className={cn(
                 "text-xs sm:text-sm mt-0.5 hidden sm:block",
-                isDarkMode ? "text-gray-400" : "text-gray-500",
+                isDarkMode ? "text-gray-400" : "text-gray-600",
               )}
             >
               {t.app.subtitle}
@@ -711,13 +807,24 @@ function HomeWrapper() {
                   : "border-l-0 sm:border-l border-gray-200",
               )}
             >
+              <a
+                href="/transactions"
+                className={cn(
+                  "hidden sm:flex items-center gap-1.5 text-sm font-medium transition-colors px-2 py-1 rounded-lg",
+                  isDarkMode
+                    ? "text-gray-300 hover:bg-gray-800"
+                    : "text-gray-700 hover:bg-gray-100",
+                )}
+              >
+                {t.transactions?.title || "Transactions"}
+              </a>
               <button
                 onClick={() => setIsNominalHidden(!isNominalHidden)}
                 className={cn(
                   "p-2 rounded-full transition-colors",
                   isDarkMode
                     ? "hover:bg-gray-800 text-gray-400 hover:text-gray-200"
-                    : "hover:bg-gray-200 text-gray-500 hover:text-gray-700",
+                    : "hover:bg-gray-200 text-gray-600 hover:text-gray-800",
                 )}
                 title={isNominalHidden ? "Show amounts" : "Hide amounts"}
               >
@@ -734,7 +841,7 @@ function HomeWrapper() {
                   "p-2 rounded-full transition-colors",
                   isDarkMode
                     ? "hover:bg-gray-800 text-gray-400 hover:text-gray-200"
-                    : "hover:bg-gray-200 text-gray-500 hover:text-gray-700",
+                    : "hover:bg-gray-200 text-gray-600 hover:text-gray-800",
                 )}
                 title={t.theme.toggle}
               >
@@ -797,8 +904,30 @@ function HomeWrapper() {
           </div>
         </header>
 
-        {/* Summary Cards */}
-        <motion.div
+        {/* Month Label */}
+        <div className="mb-3">
+          <h2
+            className={cn(
+              "text-sm font-semibold",
+              isDarkMode ? "text-gray-400" : "text-gray-600",
+            )}
+          >
+            {(() => {
+              const now = new Date();
+              const monthName = now.toLocaleDateString(
+                locale === "id" ? "id-ID" : "en-US",
+                { month: "long", year: "numeric" },
+              );
+              return formatMonthName(monthName, locale);
+            })()}
+          </h2>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Summary + Chart Column */}
+          <div className="lg:col-span-2">
+            {/* Summary Cards */}
+            <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-10"
@@ -819,18 +948,28 @@ function HomeWrapper() {
                   isDarkMode ? "bg-emerald-950/30" : "bg-emerald-50",
                 )}
               >
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <TrendingUp
+                  className={cn(
+                    "w-4 h-4",
+                    isDarkMode ? "text-emerald-400" : "text-emerald-600",
+                  )}
+                />
               </div>
               <span
                 className={cn(
                   "text-xs font-semibold",
-                  isDarkMode ? "text-gray-400" : "text-gray-500",
+                  isDarkMode ? "text-gray-400" : "text-gray-600",
                 )}
               >
                 {t.summary.totalIncome}
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-emerald-400">
+            <h2
+              className={cn(
+                "text-2xl sm:text-3xl font-bold tracking-tighter",
+                isDarkMode ? "text-emerald-400" : "text-emerald-600",
+              )}
+            >
               {isNominalHidden
                 ? "••••••"
                 : `Rp${formatCurrency(financialSummary.totalIncome, "IDR")}`}
@@ -853,18 +992,28 @@ function HomeWrapper() {
                   isDarkMode ? "bg-red-950/30" : "bg-red-50",
                 )}
               >
-                <TrendingDown className="w-4 h-4 text-red-400" />
+                <TrendingDown
+                  className={cn(
+                    "w-4 h-4",
+                    isDarkMode ? "text-red-400" : "text-red-500",
+                  )}
+                />
               </div>
               <span
                 className={cn(
                   "text-xs font-semibold",
-                  isDarkMode ? "text-gray-400" : "text-gray-500",
+                  isDarkMode ? "text-gray-400" : "text-gray-600",
                 )}
               >
                 {t.summary.totalExpenses}
               </span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tighter text-red-400">
+            <h2
+              className={cn(
+                "text-2xl sm:text-3xl font-bold tracking-tighter",
+                isDarkMode ? "text-red-400" : "text-red-500",
+              )}
+            >
               {isNominalHidden
                 ? "••••••"
                 : `Rp${formatCurrency(financialSummary.totalExpenses, "IDR")}`}
@@ -887,12 +1036,17 @@ function HomeWrapper() {
                   isDarkMode ? "bg-cyan-950/30" : "bg-cyan-50",
                 )}
               >
-                <Wallet className="w-4 h-4 text-cyan-400" />
+                <Wallet
+                  className={cn(
+                    "w-4 h-4",
+                    isDarkMode ? "text-cyan-400" : "text-cyan-600",
+                  )}
+                />
               </div>
               <span
                 className={cn(
                   "text-xs font-semibold",
-                  isDarkMode ? "text-gray-400" : "text-gray-500",
+                  isDarkMode ? "text-gray-400" : "text-gray-600",
                 )}
               >
                 {t.summary.balance}
@@ -902,8 +1056,12 @@ function HomeWrapper() {
               className={cn(
                 "text-2xl sm:text-3xl font-bold tracking-tighter",
                 financialSummary.balance >= 0
-                  ? "text-emerald-400"
-                  : "text-red-400",
+                  ? isDarkMode
+                    ? "text-emerald-400"
+                    : "text-emerald-600"
+                  : isDarkMode
+                    ? "text-red-400"
+                    : "text-red-500",
               )}
             >
               {isNominalHidden
@@ -932,7 +1090,7 @@ function HomeWrapper() {
             <h3
               className={cn(
                 "text-sm font-semibold mb-4",
-                isDarkMode ? "text-gray-400" : "text-gray-500",
+                isDarkMode ? "text-gray-400" : "text-gray-600",
               )}
             >
               {locale === "id" ? "30 Hari Terakhir" : "Last 30 Days"}
@@ -967,8 +1125,8 @@ function HomeWrapper() {
                     axisLine={false}
                     tickLine={false}
                     tick={{
-                      fontSize: 10,
-                      fill: isDarkMode ? "#6b7280" : "#9ca3af",
+                      fontSize: 11,
+                      fill: isDarkMode ? "#9ca3af" : "#6b7280",
                     }}
                     dy={10}
                   />
@@ -1025,8 +1183,8 @@ function HomeWrapper() {
                 <div className="w-3 h-1 rounded-full bg-emerald-400" />
                 <span
                   className={cn(
-                    "text-[10px] font-medium",
-                    isDarkMode ? "text-gray-500" : "text-gray-400",
+                    "text-xs font-medium",
+                    isDarkMode ? "text-gray-400" : "text-gray-600",
                   )}
                 >
                   Income
@@ -1036,8 +1194,8 @@ function HomeWrapper() {
                 <div className="w-3 h-1 rounded-full bg-red-400" />
                 <span
                   className={cn(
-                    "text-[10px] font-medium",
-                    isDarkMode ? "text-gray-500" : "text-gray-400",
+                    "text-xs font-medium",
+                    isDarkMode ? "text-gray-400" : "text-gray-600",
                   )}
                 >
                   Expense
@@ -1046,352 +1204,495 @@ function HomeWrapper() {
             </div>
           </motion.div>
         )}
-
-        {/* Recent Transactions Section */}
-        <section>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
-            <h3 className="text-lg sm:text-xl font-bold">
-              {t.bills.recentBills}
-            </h3>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-              <button
-                className={cn(
-                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all flex-shrink-0",
-                  isDarkMode
-                    ? "border-gray-700 hover:bg-gray-800 text-gray-300"
-                    : "border-gray-200 hover:bg-gray-100 text-gray-700",
-                )}
-                onClick={handleManualEntry}
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden xs:inline">{t.bills.manualEntry}</span>
-              </button>
-              <button
-                className={cn(
-                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all flex-shrink-0",
-                  isDarkMode
-                    ? "border-gray-700 hover:bg-gray-800 text-gray-300"
-                    : "border-gray-200 hover:bg-gray-100 text-gray-700",
-                )}
-                onClick={handlePhotoMode}
-              >
-                <Camera className="w-4 h-4" />
-                <span className="hidden xs:inline">{t.bills.photoMode}</span>
-              </button>
-              <button
-                className={cn(
-                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-all border-none flex-shrink-0",
-                )}
-                onClick={handleUploadPhoto}
-              >
-                <Upload className="w-4 h-4" />
-                <span className="hidden xs:inline">{t.bills.uploadPhoto}</span>
-              </button>
-            </div>
           </div>
 
-          {/* Search */}
-          <div className="mb-4 relative">
-            <div className="relative">
-              <Search
-                className={cn(
-                  "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4",
-                  isDarkMode ? "text-gray-500" : "text-gray-400",
-                )}
-              />
-              <Input
-                type="text"
-                placeholder={t.bills.searchPlaceholder}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={cn(
-                  "w-full pl-10",
-                  isDarkMode
-                    ? "bg-[#1a1d24] border-gray-700 text-white placeholder:text-gray-500"
-                    : "bg-white border-gray-200",
-                )}
-              />
-              {searchQuery && (
-                <button
-                  className={cn(
-                    "absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full flex items-center justify-center",
-                    isDarkMode
-                      ? "hover:bg-gray-700 text-gray-400"
-                      : "hover:bg-gray-200 text-gray-500",
-                  )}
-                  onClick={() => setSearchQuery("")}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+          {/* Recent Bills Column */}
+          <div className="lg:col-span-1 lg:h-[500px] lg:overflow-y-auto">
+            {/* Recent Transactions Section */}
+            <section className="flex flex-col h-full">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4 shrink-0">
+                <h3 className="text-lg sm:text-xl font-bold">
+                  {t.bills.recentBills}
+                </h3>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+                  <button
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all flex-shrink-0",
+                      isDarkMode
+                        ? "border-gray-700 hover:bg-gray-800 text-gray-300"
+                        : "border-gray-200 hover:bg-gray-100 text-gray-700",
+                    )}
+                    onClick={handleManualEntry}
                   >
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden xs:inline">{t.bills.manualEntry}</span>
+                  </button>
+                  <button
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg border text-sm font-medium transition-all flex-shrink-0",
+                      isDarkMode
+                        ? "border-gray-700 hover:bg-gray-800 text-gray-300"
+                        : "border-gray-200 hover:bg-gray-100 text-gray-700",
+                    )}
+                    onClick={handlePhotoMode}
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span className="hidden xs:inline">{t.bills.photoMode}</span>
+                  </button>
+                  <button
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white text-sm font-medium transition-all border-none flex-shrink-0",
+                    )}
+                    onClick={handleUploadPhoto}
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span className="hidden xs:inline">{t.bills.uploadPhoto}</span>
+                  </button>
+                </div>
+              </div>
 
-          {/* Unified Timeline */}
-          <div
-            className={cn(
-              "rounded-xl overflow-hidden border",
-              isDarkMode
-                ? "border-gray-800 bg-[#1a1d24]"
-                : "border-gray-200 bg-white shadow-sm",
-            )}
-          >
+              {/* Search */}
+              <div className="mb-4 relative shrink-0">
+                <div className="relative">
+                  <Search
+                    className={cn(
+                      "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4",
+                      isDarkMode ? "text-gray-400" : "text-gray-600",
+                    )}
+                  />
+                  <Input
+                    type="text"
+                    placeholder={t.bills.searchPlaceholder}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className={cn(
+                      "w-full pl-10",
+                      isDarkMode
+                        ? "bg-[#1a1d24] border-gray-700 text-white placeholder:text-gray-400"
+                        : "bg-white border-gray-200",
+                    )}
+                  />
+                  {searchQuery && (
+                    <button
+                      className={cn(
+                        "absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full flex items-center justify-center",
+                        isDarkMode
+                          ? "hover:bg-gray-700 text-gray-400"
+                          : "hover:bg-gray-200 text-gray-500",
+                      )}
+                      onClick={() => setSearchQuery("")}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Transaction List - Card Row Design */}
+              <div
+                className={cn(
+                  "flex-1 overflow-y-auto rounded-2xl border",
+                  isDarkMode
+                    ? "border-white/[0.08] bg-[#0e0e10]"
+                    : "border-gray-200 bg-white shadow-sm",
+                )}
+              >
             {isLoadingBills ? (
-              <div className="text-center py-8 text-gray-500">
-                {t.bills.loadingBills}
+              <div className="py-8">
+                <LoadingSpinner
+                  size="md"
+                  text={t.bills.loadingBills}
+                  isDarkMode={isDarkMode}
+                />
               </div>
             ) : transactions.length === 0 ? (
               <div className="text-center py-12">
                 <p
                   className={cn(
                     "mb-4",
-                    isDarkMode ? "text-gray-400" : "text-gray-500",
+                    isDarkMode ? "text-gray-500" : "text-gray-400",
                   )}
                 >
                   {t.bills.noBills}
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-                <table className="w-full text-left border-collapse min-w-[600px]">
-                  <thead>
-                    <tr
+              <AnimatePresence>
+                {transactions.map((tx, index) => {
+                  const isIncome = tx.type === "income";
+                  const data = tx.data;
+                  const category = data.category;
+                  const date = isIncome
+                    ? (data as Income).receivedAt
+                    : (data as Bill).transactionDate;
+                  const label = isIncome
+                    ? (data as Income).source ||
+                      (locale === "id"
+                        ? INCOME_CATEGORY_NAMES_ID[
+                            category as BillIncomeCategory
+                          ]
+                        : category)
+                    : (data as Bill).merchant || "-";
+                  const description = data.description || "";
+                  const categoryLabel = isIncome
+                    ? locale === "id"
+                      ? INCOME_CATEGORY_NAMES_ID[category as BillIncomeCategory]
+                      : category
+                    : locale === "id"
+                      ? CATEGORY_NAMES_ID[category as Category]
+                      : category;
+
+                  const categoryIcon = isIncome
+                    ? getIncomeCategoryIcon(category as IncomeCategory)
+                    : getCategoryIcon(category as Category);
+                  const categoryColor = isIncome
+                    ? getIncomeCategoryColor(category as IncomeCategory)
+                    : getCategoryColor(category as Category);
+
+                  const billItems =
+                    !isIncome &&
+                    (data as Bill).items &&
+                    (data as Bill).items!.length > 0
+                      ? (data as Bill).items!
+                      : null;
+
+
+                  const isExpanded = expandedItems.has(data.id);
+
+                  return (
+                    <motion.div
+                      key={`${tx.type}-${data.id}`}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.03 }}
                       className={cn(
-                        "text-[10px] sm:text-[11px] uppercase tracking-wider font-semibold",
-                        isDarkMode
-                          ? "text-gray-500 bg-gray-900/50"
-                          : "text-gray-400 bg-gray-50",
+                        index !== transactions.length - 1 &&
+                          (isDarkMode
+                            ? "border-b border-white/[0.05]"
+                            : "border-b border-gray-100"),
                       )}
                     >
-                      <th className="px-3 sm:px-6 py-3 sm:py-4">
-                        {t.bills.date}
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 sm:py-4">
-                        {t.bills.category}
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 sm:py-4">
-                        {t.bills.description}
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-right">
-                        {t.bills.amount}
-                      </th>
-                      <th className="px-3 sm:px-6 py-3 sm:py-4 w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody
-                    className={cn(
-                      "divide-y",
-                      isDarkMode ? "divide-gray-800/50" : "divide-gray-100",
-                    )}
-                  >
-                    <AnimatePresence mode="popLayout">
-                      {transactions.map((tx, index) => {
-                        const isIncome = tx.type === "income";
-                        const data = tx.data;
-                        const category = data.category;
-                        const date = isIncome
-                          ? (data as Income).receivedAt
-                          : (data as Bill).transactionDate;
-                        const label = isIncome
-                          ? (data as Income).source ||
-                            (locale === "id"
-                              ? INCOME_CATEGORY_NAMES_ID[
-                                  category as BillIncomeCategory
-                                ]
-                              : category)
-                          : (data as Bill).merchant || "-";
-                        const description = data.description || "-";
-
-                        return (
-                          <motion.tr
-                            key={`${tx.type}-${data.id}`}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className={cn(
-                              "group transition-colors",
-                              isDarkMode
-                                ? "hover:bg-gray-800/30"
-                                : "hover:bg-gray-50",
-                            )}
-                          >
-                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-medium">
-                              {formatDate(date)}
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4">
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className={cn(
-                                    "p-1.5 rounded-md",
-                                    isIncome
-                                      ? isDarkMode
-                                        ? "bg-emerald-950/30"
-                                        : "bg-emerald-50"
-                                      : isDarkMode
-                                        ? "bg-cyan-950/30"
-                                        : "bg-cyan-50",
-                                  )}
-                                >
-                                  {isIncome
-                                    ? getIncomeCategoryIcon(
-                                        category as IncomeCategory,
-                                      )
-                                    : getCategoryIcon(category as Category)}
-                                </div>
-                                <span className="text-sm">
-                                  {isIncome
-                                    ? locale === "id"
-                                      ? INCOME_CATEGORY_NAMES_ID[
-                                          category as BillIncomeCategory
-                                        ]
-                                      : category
-                                    : locale === "id"
-                                      ? CATEGORY_NAMES_ID[category as Category]
-                                      : category}
-                                </span>
-                              </div>
-                            </td>
-                            <td
-                              className={cn(
-                                "px-3 sm:px-6 py-3 sm:py-4 text-sm max-w-xs truncate",
-                                isDarkMode ? "text-gray-400" : "text-gray-500",
-                              )}
-                            >
-                              {label}
-                              {description !== "-" && (
-                                <span
-                                  className={cn(
-                                    "block text-xs truncate",
-                                    isDarkMode
-                                      ? "text-gray-500"
-                                      : "text-gray-400",
-                                  )}
-                                >
-                                  {description}
-                                </span>
-                              )}
-                            </td>
-                            <td
-                              className={cn(
-                                "px-3 sm:px-6 py-3 sm:py-4 text-sm font-bold text-right",
-                                isIncome ? "text-emerald-400" : "text-red-400",
-                              )}
-                            >
-                              {isNominalHidden
-                                ? "••••••"
-                                : `${isIncome ? "+" : "-"}${getCurrencySymbol(data.currency)}${formatCurrency(data.amount, data.currency)}`}
-                            </td>
-                            <td className="px-3 sm:px-6 py-3 sm:py-4">
-                              <DropdownMenu
-                                trigger={
-                                  <button
-                                    className={cn(
-                                      "h-8 w-8 rounded flex items-center justify-center",
-                                      isDarkMode
-                                        ? "hover:bg-gray-700 text-gray-500"
-                                        : "hover:bg-gray-100 text-gray-400",
-                                    )}
-                                  >
-                                    <svg
-                                      className="h-4 w-4"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-                                      />
-                                    </svg>
-                                  </button>
-                                }
-                              >
-                                <DropdownMenuItem
-                                  onClick={() => handleEditTransaction(tx)}
-                                >
-                                  <svg
-                                    className="mr-2 h-4 w-4"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                    />
-                                  </svg>
-                                  {t.common.edit}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setDeleteConfirmId(data.id);
-                                    setDeleteConfirmType(tx.type);
-                                  }}
-                                  className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
-                                >
-                                  <svg
-                                    className="mr-2 h-4 w-4"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                    />
-                                  </svg>
-                                  {t.common.delete}
-                                </DropdownMenuItem>
-                              </DropdownMenu>
-                            </td>
-                          </motion.tr>
-                        );
-                      })}
-                    </AnimatePresence>
-                  </tbody>
-                </table>
-                {/* Infinite scroll trigger */}
-                {hasMore && (
-                  <div ref={loadMoreRef} className="py-4 text-center">
-                    {isLoadingMore && (
+                      {/* Row main */}
                       <div
+                        onClick={() => billItems && toggleExpand(data.id)}
                         className={cn(
-                          "text-sm",
-                          isDarkMode ? "text-gray-500" : "text-gray-400",
+                          "group grid grid-cols-[40px_1fr_auto_auto] items-center gap-3 px-4 py-[13px] transition-colors",
+                          billItems ? "cursor-pointer" : "",
+                          isDarkMode
+                            ? "hover:bg-white/[0.03]"
+                            : "hover:bg-gray-50/80",
                         )}
                       >
-                        {t.bills.loadingMore}
+                        {/* Category Icon */}
+                        <div
+                          className={cn(
+                            "w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0",
+                            isDarkMode
+                              ? categoryColor.darkBg
+                              : categoryColor.lightBg,
+                          )}
+                        >
+                          {categoryIcon}
+                        </div>
+
+                        {/* Info */}
+                        <div className="min-w-0 flex flex-col gap-[2px]">
+                          {/* Name + count badge */}
+                          <div className="flex items-center gap-[7px]">
+                            <span
+                              className={cn(
+                                "text-sm font-medium truncate",
+                                isDarkMode ? "text-[#e8e8e8]" : "text-gray-900",
+                              )}
+                            >
+                              {label !== "-" ? label : categoryLabel}
+                            </span>
+                            {billItems && !isExpanded && (
+                              <span
+                                className={cn(
+                                  "text-[11px] px-1.5 rounded-[10px] font-medium shrink-0",
+                                  isDarkMode
+                                    ? "bg-white/[0.07] text-[#666]"
+                                    : "bg-gray-100 text-gray-500",
+                                )}
+                              >
+                                {billItems.length} item
+                              </span>
+                            )}
+                          </div>
+                          {/* Meta */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={cn(
+                                "text-xs",
+                                isDarkMode ? "text-gray-500" : "text-gray-400",
+                              )}
+                            >
+                              {format(date, "d MMM")}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-[11px] px-2 py-[2px] rounded-full font-medium",
+                                isDarkMode
+                                  ? categoryColor.darkPill
+                                  : categoryColor.lightPill,
+                              )}
+                            >
+                              {categoryLabel}
+                            </span>
+                          </div>
+                          {/* Description */}
+                          {description && (!billItems || isExpanded) && (
+                            <span
+                              className={cn(
+                                "text-xs truncate max-w-[340px]",
+                                isDarkMode ? "text-gray-500" : "text-gray-400",
+                              )}
+                            >
+                              {description}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Amount + Chevron */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span
+                            className={cn(
+                              "text-sm font-medium whitespace-nowrap",
+                              isIncome
+                                ? isDarkMode
+                                  ? "text-emerald-400"
+                                  : "text-emerald-600"
+                                : isDarkMode
+                                  ? "text-[#f09595]"
+                                  : "text-red-500",
+                            )}
+                          >
+                            {isNominalHidden
+                              ? "••••••"
+                              : `${isIncome ? "+" : "-"}${getCurrencySymbol(data.currency)}${formatCurrency(data.amount, data.currency)}`}
+                          </span>
+                          {billItems && (
+                            <ChevronDown
+                              className={cn(
+                                "w-4 h-4 shrink-0 transition-transform duration-200",
+                                isDarkMode ? "text-gray-500" : "text-gray-400",
+                                isExpanded && "rotate-180",
+                              )}
+                            />
+                          )}
+                        </div>
+
+                        {/* Kebab */}
+                        <div
+                          className="shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenu
+                            trigger={
+                              <button
+                                className={cn(
+                                  "w-7 h-7 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all",
+                                  isDarkMode
+                                    ? "hover:bg-white/[0.08] text-gray-500 hover:text-gray-300"
+                                    : "hover:bg-gray-100 text-gray-400 hover:text-gray-600",
+                                )}
+                              >
+                                <svg
+                                  className="h-4 w-4"
+                                  viewBox="0 0 16 16"
+                                  fill="currentColor"
+                                >
+                                  <circle cx="8" cy="3.5" r="1.3" />
+                                  <circle cx="8" cy="8" r="1.3" />
+                                  <circle cx="8" cy="12.5" r="1.3" />
+                                </svg>
+                              </button>
+                            }
+                          >
+                            <DropdownMenuItem
+                              onClick={() => handleEditTransaction(tx)}
+                            >
+                              <svg
+                                className="mr-2 h-4 w-4"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                />
+                              </svg>
+                              {t.common.edit}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setDeleteConfirmId(data.id);
+                                setDeleteConfirmType(tx.type);
+                              }}
+                              className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                            >
+                              <svg
+                                className="mr-2 h-4 w-4"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                              {t.common.delete}
+                            </DropdownMenuItem>
+                          </DropdownMenu>
+                        </div>
                       </div>
-                    )}
+
+                      {/* Expandable items panel */}
+                      {billItems && (
+                        <AnimatePresence initial={false}>
+                          {isExpanded && (
+                            <motion.div
+                              key="items"
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.22, ease: "easeInOut" }}
+                              className="overflow-hidden"
+                            >
+                              <div className="relative pl-[62px] pr-4 pb-1.5">
+                                {/* Vertical line */}
+                                <div
+                                  className={cn(
+                                    "absolute left-[50px] top-0 bottom-1 w-[1.5px] rounded-sm",
+                                    isDarkMode
+                                      ? "bg-white/[0.07]"
+                                      : "bg-gray-200",
+                                  )}
+                                />
+                                <div className="flex flex-col">
+                                  {billItems.map((item, itemIdx) => (
+                                    <div
+                                      key={itemIdx}
+                                      className={cn(
+                                        "flex flex-col py-1.5 border-b last:border-b-0",
+                                        isDarkMode
+                                          ? "border-b-white/[0.04]"
+                                          : "border-b-gray-100",
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <div
+                                          className={cn(
+                                            "w-1 h-1 rounded-full shrink-0",
+                                            isDarkMode
+                                              ? "bg-white/[0.12]"
+                                              : "bg-gray-300",
+                                          )}
+                                        />
+                                        <span
+                                          className={cn(
+                                            "text-[12px]",
+                                            isDarkMode
+                                              ? "text-gray-400"
+                                              : "text-gray-600",
+                                          )}
+                                        >
+                                          {item.name}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 pl-[10px]">
+                                        <span
+                                          className={cn(
+                                            "text-[11px]",
+                                            isDarkMode
+                                              ? "text-gray-500"
+                                              : "text-gray-400",
+                                          )}
+                                        >
+                                          x{item.qty}
+                                        </span>
+                                        <span
+                                          className={cn(
+                                            "text-[12px]",
+                                            isDarkMode
+                                              ? "text-gray-300"
+                                              : "text-gray-700",
+                                          )}
+                                        >
+                                          {isNominalHidden
+                                            ? "••••••"
+                                            : `${getCurrencySymbol(data.currency)}${formatCurrency(item.price * item.qty, data.currency)}`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            )}
+            {/* Infinite scroll trigger */}
+            {hasMore && (
+              <div ref={loadMoreRef} className="py-4 text-center">
+                {isLoadingMore && (
+                  <div className="py-4">
+                    <LoadingSpinner
+                      size="sm"
+                      text={t.bills.loadingMore}
+                      isDarkMode={isDarkMode}
+                    />
                   </div>
                 )}
               </div>
             )}
+            {/* View all transactions link */}
+            <div className="mt-4 text-center">
+              <a
+                href="/transactions"
+                className={cn(
+                  "inline-flex items-center gap-1.5 text-sm font-medium transition-colors",
+                  isDarkMode
+                    ? "text-cyan-400 hover:text-cyan-300"
+                    : "text-cyan-600 hover:text-cyan-700",
+                )}
+              >
+                {t.bills.viewAll}
+                <ChevronDown className="w-4 h-4 rotate-[-90deg]" />
+              </a>
+            </div>
           </div>
         </section>
+          </div>
+        </div>
       </div>
 
       {/* Hidden file input */}
@@ -1453,7 +1754,26 @@ function HomeWrapper() {
                 date: new Date(bill.transactionDate)
                   .toISOString()
                   .split("T")[0],
+                items: bill.items?.map((item) => ({
+                  name: item.name,
+                  qty: item.qty.toString(),
+                  price: item.price.toString(),
+                })),
               };
+            })()}
+            initialItems={(() => {
+              if (!editingBillId) return undefined;
+              const tx = transactions.find(
+                (t) => t.type === "expense" && t.data.id === editingBillId,
+              );
+              if (!tx || tx.type !== "expense") return undefined;
+              const bill = tx.data;
+              if (!bill.items || bill.items.length === 0) return undefined;
+              return bill.items.map((item) => ({
+                name: item.name,
+                qty: item.qty.toString(),
+                price: item.price.toString(),
+              }));
             })()}
             initialIncomeData={(() => {
               if (!editingIncomeId) return undefined;
@@ -1490,7 +1810,7 @@ function HomeWrapper() {
                 <p
                   className={cn(
                     "text-sm",
-                    isDarkMode ? "text-gray-400" : "text-gray-500",
+                    isDarkMode ? "text-gray-400" : "text-gray-600",
                   )}
                 >
                   {t["import"].billsImported}
@@ -1504,7 +1824,7 @@ function HomeWrapper() {
                   <div
                     className={cn(
                       "max-h-40 overflow-y-auto text-sm space-y-1",
-                      isDarkMode ? "text-gray-400" : "text-gray-500",
+                      isDarkMode ? "text-gray-400" : "text-gray-600",
                     )}
                   >
                     {importResult.errors.slice(0, 10).map((error, idx) => (
@@ -1548,7 +1868,7 @@ function HomeWrapper() {
           <p
             className={cn(
               "text-sm",
-              isDarkMode ? "text-gray-400" : "text-gray-500",
+              isDarkMode ? "text-gray-400" : "text-gray-600",
             )}
           >
             {t.delete.confirmMessage}
@@ -1565,7 +1885,7 @@ function HomeWrapper() {
             </Button>
             <Button
               variant="outline"
-              className="text-red-400 hover:bg-red-900/20 hover:text-red-300"
+              className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20 dark:hover:text-red-300"
               onClick={() =>
                 deleteConfirmId && handleDeleteTransaction(deleteConfirmId)
               }
@@ -1590,7 +1910,12 @@ export default function Home() {
             "bg-[#0f1115] text-white",
           )}
         >
-          <div className="text-gray-400">Loading...</div>
+          <LoadingSpinner
+            size="lg"
+            text="Loading..."
+            isDarkMode
+            fullScreen
+          />
         </div>
       }
     >
