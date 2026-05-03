@@ -57,3 +57,4 @@ logs/
 ecosystem.config.cjs
 # Added by code-review-graph
 .code-review-graph/
+*.traineddata

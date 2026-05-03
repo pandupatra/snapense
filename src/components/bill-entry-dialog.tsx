@@ -274,7 +274,7 @@ export function BillEntryDialog({
     setIsProcessing(true);
     try {
       const compressedImage = await compressImage(imageData, 1024);
-      const extracted = await extractReceiptData(compressedImage);
+      const extracted = await extractReceiptData({ imageData: compressedImage });
       console.log("Extracted receipt data:", extracted);
       setExtractedData(extracted);
       setExpenseForm({

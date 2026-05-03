@@ -102,6 +102,7 @@ export const id: Translations = {
     processingReceipt: "Memproses struk dengan AI...",
     aiConfidence: "Keyakinan AI",
     notes: "Catatan:",
+    discount: "Diskon",
     items: "Item",
     addItem: "Tambah Item",
     itemName: "Nama item",

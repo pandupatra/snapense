@@ -1,6 +1,7 @@
 "use server";
 
 import { eq, desc, or, like, and } from "drizzle-orm";
+import sharp from "sharp";
 import { db } from "@/db";
 import {
   bills,
@@ -10,6 +11,8 @@ import {
   type Category,
 } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-utils";
+import { extractTextFromImage } from "@/lib/ocr";
+import { logGeminiCost } from "@/lib/gemini-cost";
 
 export interface BillFormData {
   amount: string;
@@ -30,6 +33,7 @@ export interface ExtractedReceiptData {
   date: string;
   confidence: number;
   issues: string[];
+  discount: string;
   items?: { name: string; qty: string; price: string }[];
 }
 
@@ -316,19 +320,6 @@ function normalizeAmount(value: any): number {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
-// Helper function to compress base64 image data (server-side using Buffer)
-function compressBase64Image(base64Data: string, maxSizeKB = 1024): string {
-  // For server-side, we'll just truncate if too large
-  // In production, use sharp or jimp library for proper compression
-  const currentSizeKB = (base64Data.length * 0.75) / 1024; // approximate
-  if (currentSizeKB > maxSizeKB) {
-    console.warn(
-      `Image too large (${currentSizeKB.toFixed(0)}KB), may fail API call`,
-    );
-  }
-  return base64Data;
-}
-
 // Helper function to normalize date
 function normalizeDate(value: any): string {
   if (!value) {
@@ -352,6 +343,7 @@ function mockScan(): ExtractedReceiptData {
     date: new Date().toISOString().slice(0, 10),
     confidence: 0,
     issues: ["API key not configured - Set GEMINI_API_KEY in .env.local"],
+    discount: "0.00",
     items: [],
   };
 }
@@ -466,22 +458,85 @@ export async function importBillsFromCSV(
 }
 
 export async function extractReceiptData(
-  imageData: string,
+  params: { imageData: string },
 ): Promise<ExtractedReceiptData> {
+  const { imageData } = params;
   const apiKey = process.env.GEMINI_API_KEY;
 
-  // Use mock scan if API key is not configured (like old app)
   if (!apiKey) {
     console.warn("GEMINI_API_KEY is not set, returning mock data");
     return mockScan();
   }
 
-  // Use known valid model name
-  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  // Step 1: Run OCR to get a text hint from the receipt
+  let ocrText = "";
+  try {
+    const ocrResult = await extractTextFromImage(imageData);
+    ocrText = ocrResult.text.trim();
+    console.log("[OCR] Got text hint, length:", ocrText.length);
+  } catch (err) {
+    console.warn("[OCR] Failed, will rely on vision only:", err);
+  }
+
+  // Step 2: Send compressed image + OCR text hint to Gemini.
+  // Image is downscaled heavily to reduce token cost — the OCR
+  // text compensates for the lower visual quality.
+  return extractWithCompressedVisionAndOCR(imageData, ocrText, apiKey);
+}
+
+async function compressImageForAPI(
+  imageData: string,
+): Promise<{ base64: string; mediaType: string }> {
+  let base64Data: string;
+  let mediaType = "image/jpeg";
+
+  if (imageData.includes(",")) {
+    const parts = imageData.split(",", 2);
+    base64Data = parts.length === 2 ? parts[1] : imageData;
+    const mimeMatch = parts[0]?.match(/image\/[a-z+]+/);
+    if (mimeMatch) mediaType = mimeMatch[0];
+  } else {
+    base64Data = imageData;
+  }
+
+  try {
+    const inputBuffer = Buffer.from(base64Data, "base64");
+    const inputSizeKB = (inputBuffer.length / 1024).toFixed(0);
+    console.log("[Compress] Input image size:", inputSizeKB, "KB");
+
+    const compressed = await sharp(inputBuffer)
+      .resize(1024, 1024, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 50 })
+      .toBuffer();
+
+    const outputSizeKB = (compressed.length / 1024).toFixed(0);
+    console.log(
+      "[Compress] Output image size:",
+      outputSizeKB,
+      "KB (",
+      Math.round((1 - compressed.length / inputBuffer.length) * 100),
+      "% reduction)",
+    );
+
+    mediaType = "image/jpeg";
+    base64Data = compressed.toString("base64");
+  } catch (err) {
+    console.warn("[Compress] Failed, sending original image:", err);
+  }
+
+  return { base64: base64Data, mediaType };
+}
+
+async function extractWithCompressedVisionAndOCR(
+  imageData: string,
+  ocrText: string,
+  apiKey: string,
+): Promise<ExtractedReceiptData> {
+  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash-lite";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-  const prompt = [
-    "Analyze this retail receipt image and respond with valid JSON only.",
+  const promptLines = [
+    "Analyze this receipt image and respond with valid JSON only.",
     "Target locale: Indonesian retail receipts unless the document clearly indicates otherwise.",
     "Extract an itemized list of products if visible on the receipt.",
     "Return this JSON shape exactly:",
@@ -496,44 +551,53 @@ export async function extractReceiptData(
     '  "date": "YYYY-MM-DD",',
     '  "items": [',
     '    {"name": "product name", "qty": "1", "price": "0.00"},',
+    '    {"name": "VOUCHER", "qty": "1", "price": "0.00"},',
     '    {"name": "another product", "qty": "2", "price": "0.00"}',
     "  ]",
     "}",
-    "If line items are clearly visible, list each one in the items array. Set amount to the total from the receipt.",
+    "If line items are clearly visible, list each one in the items array. Set amount to the NET total the customer paid.",
     "If line items are NOT visible or unclear, return an empty items array and provide a description instead.",
     "IMPORTANT: confidence must be a number from 0-100 (percentage), not a decimal.",
     "Use 80-100 for high confidence (clear receipt), 50-79 for medium (some unclear parts), 0-49 for low (very blurry or missing info).",
     "If a field is missing, use safe defaults rather than inventing detailed facts.",
     "Locale hint: Indonesian.",
-  ].join("\n");
+    "",
+    "DISCOUNT / VOUCHER HANDLING — CRITICAL:",
+    "If the receipt contains a discount, voucher, or promotion line, you MUST include it in the items array:",
+    "- Place the discount/voucher item DIRECTLY AFTER the item it applies to.",
+    "- Use a name that describes the discount: 'VOUCHER', 'DISKON', 'PROMO', 'POTONGAN', etc.",
+    "- Set the price to the DISCOUNT AMOUNT as a POSITIVE number (e.g. '10000' for a Rp 10.000 voucher).",
+    "- Set qty to '1'.",
+    "- Example receipt layout and items:",
+    "  Receipt:                Items array:",
+    "  Nasi Goreng  Rp 25000  → {\"name\": \"Nasi Goreng\", \"qty\": \"1\", \"price\": \"25000\"}",
+    "  Voucher     -Rp 10000  → {\"name\": \"VOUCHER\", \"qty\": \"1\", \"price\": \"10000\"}",
+    "  Es Teh      Rp 8000   → {\"name\": \"Es Teh\", \"qty\": \"1\", \"price\": \"8000\"}",
+    "- The 'amount' field MUST be the NET total (25000 - 10000 + 8000 = 23000).",
+    "- If the discount applies to the whole order (not a specific item), place it AFTER the last item.",
+    "- Common discount keywords: DISCOUNT, DISKON, VOUCHER, PROMO, POTONGAN, CASHBACK, GRATIS, HEMAT.",
+  ];
 
-  // Extract base64 data from data URL (format: data:image/jpeg;base64,<data>)
-  let base64Data: string;
-  let mediaType = "image/jpeg";
-
-  if (imageData.includes(",")) {
-    const parts = imageData.split(",", 2);
-    if (parts.length === 2) {
-      base64Data = parts[1];
-      // Extract mime type from the data URL prefix
-      const mimeMatch = parts[0].match(/image\/[a-z+]+/);
-      if (mimeMatch) {
-        mediaType = mimeMatch[0];
-      }
-    } else {
-      base64Data = imageData;
-    }
-  } else {
-    base64Data = imageData;
+  if (ocrText) {
+    promptLines.push(
+      "",
+      "Below is an OCR text extract from this same receipt. Use it as a reference to help identify text — but always trust the image over OCR when they disagree, as OCR may contain errors:",
+      "",
+      "--- OCR REFERENCE ---",
+      ocrText.slice(0, 3000),
+      "--- END OCR REFERENCE ---",
+    );
   }
 
+  const prompt = promptLines.join("\n");
+
+  // Compress image to reduce API cost
+  const { base64: base64Data, mediaType } =
+    await compressImageForAPI(imageData);
+
   console.log(
-    "[Gemini Scan] base64 length:",
-    base64Data.length,
-    "mime type:",
-    mediaType,
-    "model:",
-    model,
+    "[Gemini Scan] model:", model,
+    "OCR ref:", ocrText ? `${ocrText.length} chars` : "none",
   );
 
   try {
@@ -547,15 +611,8 @@ export async function extractReceiptData(
         contents: [
           {
             parts: [
-              {
-                text: prompt,
-              },
-              {
-                inline_data: {
-                  mime_type: mediaType,
-                  data: base64Data,
-                },
-              },
+              { text: prompt },
+              { inline_data: { mime_type: mediaType, data: base64Data } },
             ],
           },
         ],
@@ -575,7 +632,9 @@ export async function extractReceiptData(
     const payload = await response.json();
     console.log("[Gemini API] Response received");
 
-    // Extract text from Gemini response using helper function
+    // Log cost / token usage
+    logGeminiCost(model, payload.usageMetadata);
+
     const rawText = extractResponseText(payload);
 
     if (!rawText) {
@@ -585,87 +644,113 @@ export async function extractReceiptData(
 
     console.log("[Gemini API] Raw response length:", rawText.length);
 
-    // Parse JSON using helper function
     const parsed = parseJsonPayload(rawText);
-
-    // Normalize the extracted data
-    const amount = normalizeAmount(parsed.amount);
-    const currency = String(parsed.currency || "IDR")
-      .trim()
-      .toUpperCase();
-    const category = CATEGORIES.includes(parsed.category)
-      ? parsed.category
-      : "Other";
-    const description = String(parsed.description || "")
-      .trim()
-      .slice(0, 200);
-    const merchant = String(parsed.merchant || "")
-      .trim()
-      .slice(0, 100);
-    const date = normalizeDate(parsed.date);
-
-    // Normalize confidence: ensure it's a percentage (0-100)
-    let confidence =
-      typeof parsed.confidence === "number" ? parsed.confidence : 0;
-    // If confidence is in decimal range (0-1), convert to percentage (0-100)
-    if (confidence > 0 && confidence < 1) {
-      confidence = Math.round(confidence * 100);
-    }
-    // Clamp to valid range
-    confidence = Math.max(0, Math.min(100, Math.round(confidence)));
-
-    const issues = Array.isArray(parsed.issues)
-      ? parsed.issues.map((i: string) => String(i)).filter(Boolean)
-      : [];
-
-    // Normalize items
-    const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
-    const extractedItems: { name: string; qty: string; price: string }[] =
-      rawItems
-        .filter((item: any) => item && item.name)
-        .map((item: any) => ({
-          name: String(item.name || "")
-            .trim()
-            .slice(0, 200),
-          qty: String(item.qty || "1").trim(),
-          price: String(item.price || "0").trim(),
-        }));
-
-    const hasExtractedItems = extractedItems.length > 0;
-
-    console.log("[Gemini Scan] Extracted:", {
-      amount,
-      currency,
-      category,
-      description,
-      merchant,
-      date,
-      confidence,
-      issues,
-      itemsCount: extractedItems.length,
-    });
-
-    return {
-      amount: hasExtractedItems
-        ? extractedItems
-            .reduce(
-              (sum: number, i) =>
-                sum + normalizeAmount(i.price) * parseInt(i.qty || "1", 10),
-              0,
-            )
-            .toFixed(2)
-        : amount.toFixed(2),
-      currency,
-      category,
-      description: hasExtractedItems ? "" : description,
-      merchant,
-      date,
-      confidence,
-      issues,
-      items: hasExtractedItems ? extractedItems : undefined,
-    };
+    return normalizeExtractedData(parsed);
   } catch (error: any) {
     console.error("[Gemini API] Exception:", error.message);
     return mockScan();
   }
+}
+
+function normalizeExtractedData(parsed: any): ExtractedReceiptData {
+  let amount = normalizeAmount(parsed.amount);
+  const currency = String(parsed.currency || "IDR")
+    .trim()
+    .toUpperCase();
+  const category = CATEGORIES.includes(parsed.category)
+    ? parsed.category
+    : "Other";
+  const description = String(parsed.description || "")
+    .trim()
+    .slice(0, 200);
+  const merchant = String(parsed.merchant || "")
+    .trim()
+    .slice(0, 100);
+  const date = normalizeDate(parsed.date);
+
+  let confidence =
+    typeof parsed.confidence === "number" ? parsed.confidence : 0;
+  if (confidence > 0 && confidence < 1) {
+    confidence = Math.round(confidence * 100);
+  }
+  confidence = Math.max(0, Math.min(100, Math.round(confidence)));
+
+  const issues = Array.isArray(parsed.issues)
+    ? parsed.issues.map((i: string) => String(i)).filter(Boolean)
+    : [];
+
+  const DISCOUNT_KEYWORDS = [
+    "voucher", "diskon", "discount", "promo", "potongan",
+    "cashback", "gratis", "hemat", "saving",
+  ];
+
+  const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+  const mappedItems: { name: string; qty: string; price: string }[] =
+    rawItems
+      .filter((item: any) => item && item.name)
+      .map((item: any) => ({
+        name: String(item.name || "")
+          .trim()
+          .slice(0, 200),
+        qty: String(item.qty || "1").trim(),
+        price: String(item.price || "0").trim(),
+      }));
+
+  // Merge discount items into their preceding item:
+  // e.g. "Nasi Goreng Rp 25000" + "VOUCHER Rp 10000"
+  //      → "Nasi Goreng Rp 15000" (25000 - 10000)
+  const extractedItems: { name: string; qty: string; price: string }[] = [];
+  for (const item of mappedItems) {
+    const nameLower = item.name.toLowerCase();
+    const isDiscount = DISCOUNT_KEYWORDS.some((kw) => nameLower.includes(kw));
+
+    if (isDiscount && extractedItems.length > 0) {
+      const prev = extractedItems[extractedItems.length - 1];
+      const discountAmt = normalizeAmount(item.price);
+      const prevTotal = normalizeAmount(prev.price) * parseInt(prev.qty || "1", 10);
+      const newTotal = Math.max(0, prevTotal - discountAmt);
+      const prevQty = parseInt(prev.qty || "1", 10);
+      prev.price = prevQty > 1
+        ? (newTotal / prevQty).toFixed(2)
+        : newTotal.toFixed(2);
+      prev.name = `${prev.name} (${item.name} -Rp ${discountAmt.toLocaleString("id-ID")})`;
+    } else {
+      extractedItems.push(item);
+    }
+  }
+
+  const hasExtractedItems = extractedItems.length > 0;
+
+  console.log("[Scan] Extracted:", {
+    amount,
+    currency,
+    category,
+    description,
+    merchant,
+    date,
+    confidence,
+    issues,
+    itemsCount: extractedItems.length,
+  });
+
+  return {
+    amount: hasExtractedItems
+      ? extractedItems
+          .reduce(
+            (sum: number, i) =>
+              sum + normalizeAmount(i.price) * parseInt(i.qty || "1", 10),
+            0,
+          )
+          .toFixed(2)
+      : amount.toFixed(2),
+    currency,
+    category,
+    description: hasExtractedItems ? "" : description,
+    merchant,
+    date,
+    confidence,
+    issues,
+    discount: "0.00",
+    items: hasExtractedItems ? extractedItems : undefined,
+  };
 }

@@ -14,6 +14,7 @@ const nextConfig = {
       bodySizeLimit: '10mb',
     },
   },
+  serverExternalPackages: ['tesseract.js', 'tesseract.js-core', 'sharp'],
 };
 
 export default nextConfig;

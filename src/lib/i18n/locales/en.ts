@@ -99,6 +99,7 @@ export const en = {
     processingReceipt: "Processing receipt with AI...",
     aiConfidence: "AI Confidence",
     notes: "Notes:",
+    discount: "Discount",
     items: "Items",
     addItem: "Add Item",
     itemName: "Item name",
