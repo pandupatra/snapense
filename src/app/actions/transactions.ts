@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, desc, sql, and, or, like, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, or, like, inArray, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { bills, incomes, items } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-utils";
@@ -60,13 +60,11 @@ export async function getFilteredTransactions(
     const fetchLimit = limit + 1;
 
     // Build date range filter
-    let dateFilter;
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
     if (month && year) {
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0, 23, 59, 59);
-      const startTs = Math.floor(startDate.getTime() / 1000);
-      const endTs = Math.floor(endDate.getTime() / 1000);
-      dateFilter = { startTs, endTs };
+      startDate = new Date(year, month - 1, 1);
+      endDate = new Date(year, month, 0, 23, 59, 59);
     }
 
     const searchTerm = search?.trim() ? `%${search.trim()}%` : null;
@@ -78,11 +76,11 @@ export async function getFilteredTransactions(
     if (type !== "income") {
       let expenseWhere = eq(bills.userId, userId);
 
-      if (dateFilter) {
+      if (startDate && endDate) {
         expenseWhere = and(
           expenseWhere,
-          sql`${bills.transactionDate} >= ${dateFilter.startTs}`,
-          sql`${bills.transactionDate} <= ${dateFilter.endTs}`,
+          gte(bills.transactionDate, startDate),
+          lte(bills.transactionDate, endDate),
         )!;
       }
 
@@ -110,11 +108,11 @@ export async function getFilteredTransactions(
     if (type !== "expense") {
       let incomeWhere = eq(incomes.userId, userId);
 
-      if (dateFilter) {
+      if (startDate && endDate) {
         incomeWhere = and(
           incomeWhere,
-          sql`${incomes.receivedAt} >= ${dateFilter.startTs}`,
-          sql`${incomes.receivedAt} <= ${dateFilter.endTs}`,
+          gte(incomes.receivedAt, startDate),
+          lte(incomes.receivedAt, endDate),
         )!;
       }
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, desc, sql, and, or, like, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, or, like, inArray, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { bills, incomes, items } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-utils";
@@ -32,19 +32,17 @@ export async function getFinancialSummary(
     if (month && year) {
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0, 23, 59, 59);
-      const startTs = Math.floor(startDate.getTime() / 1000);
-      const endTs = Math.floor(endDate.getTime() / 1000);
 
       expenseWhere = and(
         eq(bills.userId, userId),
-        sql`${bills.transactionDate} >= ${startTs}`,
-        sql`${bills.transactionDate} <= ${endTs}`,
+        gte(bills.transactionDate, startDate),
+        lte(bills.transactionDate, endDate),
       )!;
 
       incomeWhere = and(
         eq(incomes.userId, userId),
-        sql`${incomes.receivedAt} >= ${startTs}`,
-        sql`${incomes.receivedAt} <= ${endTs}`,
+        gte(incomes.receivedAt, startDate),
+        lte(incomes.receivedAt, endDate),
       )!;
     }
 
@@ -83,40 +81,38 @@ export async function getChartData(): Promise<DailyFinance[]> {
     const startDate = new Date(now);
     startDate.setDate(startDate.getDate() - 29);
     startDate.setHours(0, 0, 0, 0);
-    const startTs = Math.floor(startDate.getTime() / 1000);
-    const endTs = Math.floor(now.getTime() / 1000);
 
     const [expenseDays, incomeDays] = await Promise.all([
       db
         .select({
-          date: sql<string>`date(${bills.transactionDate}, 'unixepoch')`,
+          date: sql<string>`TO_CHAR(${bills.transactionDate}, 'YYYY-MM-DD')`,
           total: sql<number>`coalesce(sum(${bills.amount}), 0)`,
         })
         .from(bills)
         .where(
           and(
             eq(bills.userId, userId),
-            sql`${bills.transactionDate} >= ${startTs}`,
-            sql`${bills.transactionDate} <= ${endTs}`,
+            gte(bills.transactionDate, startDate),
+            lte(bills.transactionDate, now),
           ),
         )
-        .groupBy(sql`date(${bills.transactionDate}, 'unixepoch')`)
-        .orderBy(sql`date(${bills.transactionDate}, 'unixepoch')`),
+        .groupBy(sql`TO_CHAR(${bills.transactionDate}, 'YYYY-MM-DD')`)
+        .orderBy(sql`TO_CHAR(${bills.transactionDate}, 'YYYY-MM-DD')`),
       db
         .select({
-          date: sql<string>`date(${incomes.receivedAt}, 'unixepoch')`,
+          date: sql<string>`TO_CHAR(${incomes.receivedAt}, 'YYYY-MM-DD')`,
           total: sql<number>`coalesce(sum(${incomes.amount}), 0)`,
         })
         .from(incomes)
         .where(
           and(
             eq(incomes.userId, userId),
-            sql`${incomes.receivedAt} >= ${startTs}`,
-            sql`${incomes.receivedAt} <= ${endTs}`,
+            gte(incomes.receivedAt, startDate),
+            lte(incomes.receivedAt, now),
           ),
         )
-        .groupBy(sql`date(${incomes.receivedAt}, 'unixepoch')`)
-        .orderBy(sql`date(${incomes.receivedAt}, 'unixepoch')`),
+        .groupBy(sql`TO_CHAR(${incomes.receivedAt}, 'YYYY-MM-DD')`)
+        .orderBy(sql`TO_CHAR(${incomes.receivedAt}, 'YYYY-MM-DD')`),
     ]);
 
     // Merge into unified daily data

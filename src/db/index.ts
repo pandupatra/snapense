@@ -1,17 +1,29 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import * as schema from "./schema";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+
+let _pool: Pool | null = null;
+
+function createPool() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL environment variable is not set");
+  }
+  return new Pool({ connectionString });
+}
+
+function getPool() {
+  if (!_pool) {
+    _pool = createPool();
+  }
+  return _pool;
+}
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
 function createDb() {
-  const dbPath = ".data/db.sqlite";
-  mkdirSync(dirname(dbPath), { recursive: true });
-  const sqlite = new Database(dbPath);
-  sqlite.pragma("journal_mode = WAL");
-  return drizzle(sqlite, { schema });
+  const pool = getPool();
+  return drizzle(pool, { schema });
 }
 
 export function getDb() {

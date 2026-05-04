@@ -8,15 +8,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:migrate": "tsx src/db/migrate.ts",
-    "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
-    "postinstall": "npm rebuild better-sqlite3"
+    "db:migrate": "dotenv -e .env.local -- tsx src/db/migrate.ts",
+    "db:generate": "dotenv -e .env.local -- drizzle-kit generate",
+    "db:push": "dotenv -e .env.local -- drizzle-kit push"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "better-auth": "^1.5.6",
-    "better-sqlite3": "^12.9.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
@@ -25,6 +23,7 @@
     "motion": "^12.38.0",
     "next": "^16.2.1",
     "next-themes": "^0.4.6",
+    "pg": "^8.14.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "recharts": "^3.8.0",
@@ -35,11 +34,12 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
+    "@types/pg": "^8.11.13",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.27",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.1",

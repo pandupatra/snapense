@@ -124,8 +124,8 @@ export async function createBill(
     };
 
     if (hasItems) {
-      db.transaction((tx) => {
-        tx.insert(bills).values(newBill).run();
+      await db.transaction(async (tx) => {
+        await tx.insert(bills).values(newBill);
         const itemValues = data.items!.map((item) => ({
           id: crypto.randomUUID(),
           billId,
@@ -133,7 +133,7 @@ export async function createBill(
           qty: parseInt(item.qty || "1", 10),
           price: parseFloat(item.price || "0"),
         }));
-        tx.insert(items).values(itemValues).run();
+        await tx.insert(items).values(itemValues);
       });
     } else {
       await db.insert(bills).values(newBill);
@@ -179,9 +179,9 @@ export async function updateBill(
     };
 
     if (hasItems) {
-      db.transaction((tx) => {
-        tx.update(bills).set(updatedBill).where(eq(bills.id, id)).run();
-        tx.delete(items).where(eq(items.billId, id)).run();
+      await db.transaction(async (tx) => {
+        await tx.update(bills).set(updatedBill).where(eq(bills.id, id));
+        await tx.delete(items).where(eq(items.billId, id));
         const itemValues = data.items!.map((item) => ({
           id: crypto.randomUUID(),
           billId: id,
@@ -189,7 +189,7 @@ export async function updateBill(
           qty: parseInt(item.qty || "1", 10),
           price: parseFloat(item.price || "0"),
         }));
-        tx.insert(items).values(itemValues).run();
+        await tx.insert(items).values(itemValues);
       });
     } else {
       await db.delete(items).where(eq(items.billId, id));
