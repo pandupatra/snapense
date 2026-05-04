@@ -40,8 +40,8 @@ next-env.d.ts
 *.db-shm
 *.db-wal
 
+# drizzle (MUST be committed — contains migration history)
 # drizzle
-drizzle
 
 # logs
 logs/

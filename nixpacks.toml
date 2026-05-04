@@ -1,2 +1,3 @@
 [start]
-cmd = "npm run db:migrate && node server.js"
+cmd = "npx tsx src/db/migrate.ts && node .next/standalone/server.js"
+
